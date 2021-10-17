@@ -179,7 +179,8 @@ union (ZDD node1) (ZDD node2) = runST $ do
       f p F = return p
       f p q | p == q = return p
       f p q = do
-        m <- H.lookup h (p, q)
+        let key = if nodeId p <= nodeId q then (p, q) else (q, p)
+        m <- H.lookup h key
         case m of
           Just ret -> return ret
           Nothing -> do
@@ -187,7 +188,7 @@ union (ZDD node1) (ZDD node2) = runST $ do
               ZDDCase2LT ptop p0 p1 -> liftM2 (zddNode ptop) (f p0 q) (pure p1)
               ZDDCase2GT qtop q0 q1 -> liftM2 (zddNode qtop) (f p q0) (pure q1)
               ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (zddNode top) (f p0 q0) (f p1 q1)
-            H.insert h (p, q) ret
+            H.insert h key ret
             return ret
   ret <- f node1 node2
   return (ZDD ret)
@@ -204,7 +205,8 @@ intersection (ZDD node1) (ZDD node2) = runST $ do
       f _p F = return F
       f p q | p == q = return p
       f p q = do
-        m <- H.lookup h (p, q)
+        let key = if nodeId p <= nodeId q then (p, q) else (q, p)
+        m <- H.lookup h key
         case m of
           Just ret -> return ret
           Nothing -> do
@@ -212,7 +214,7 @@ intersection (ZDD node1) (ZDD node2) = runST $ do
               ZDDCase2LT _ptop p0 _p1 -> f p0 q
               ZDDCase2GT _qtop q0 _q1 -> f p q0
               ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (zddNode top) (f p0 q0) (f p1 q1)
-            H.insert h (p, q) ret
+            H.insert h key ret
             return ret
   ret <- f node1 node2
   return (ZDD ret)

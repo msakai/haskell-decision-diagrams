@@ -112,7 +112,8 @@ BDD node1 .&&. BDD node2 = runST $ do
       f _ F = return F
       f a b | a == b = return a
       f n1@(Branch ind1 lo1 hi1) n2@(Branch ind2 lo2 hi2) = do
-        m <- H.lookup h (n1, n2)
+        let key = if nodeId n1 <= nodeId n2 then (n1, n2) else (n2, n1)
+        m <- H.lookup h key
         case m of
           Just y -> return y
           Nothing -> do
@@ -120,7 +121,7 @@ BDD node1 .&&. BDD node2 = runST $ do
               EQ -> liftM2 (bddNode ind1) (f lo1 lo2) (f hi1 hi2)
               LT -> liftM2 (bddNode ind1) (f lo1 n2) (f hi1 n2)
               GT -> liftM2 (bddNode ind2) (f n1 lo2) (f n1 hi2)
-            H.insert h (n1, n2) ret
+            H.insert h key ret
             return ret
   ret <- f node1 node2
   return (BDD ret)
@@ -135,7 +136,8 @@ BDD node1 .||. BDD node2 = runST $ do
       f a F = return a
       f a b | a == b = return a
       f n1@(Branch ind1 lo1 hi1) n2@(Branch ind2 lo2 hi2) = do
-        m <- H.lookup h (n1, n2)
+        let key = if nodeId n1 <= nodeId n2 then (n1, n2) else (n2, n1)
+        m <- H.lookup h key
         case m of
           Just y -> return y
           Nothing -> do
@@ -143,7 +145,7 @@ BDD node1 .||. BDD node2 = runST $ do
               EQ -> liftM2 (bddNode ind1) (f lo1 lo2) (f hi1 hi2)
               LT -> liftM2 (bddNode ind1) (f lo1 n2) (f hi1 n2)
               GT -> liftM2 (bddNode ind2) (f n1 lo2) (f n1 hi2)
-            H.insert h (n1, n2) ret
+            H.insert h key ret
             return ret
   ret <- f node1 node2
   return (BDD ret)

@@ -23,6 +23,7 @@ module Data.DecisionDiagram.BDD.Internal
   (
   -- * Low level node type
     Node (T, F, Branch)
+  , nodeId
 
   -- * Item ordering
   , ItemOrder (..)
@@ -90,6 +91,9 @@ instance Uninternable Node where
 nodeCache :: Cache Node
 nodeCache = mkCache
 {-# NOINLINE nodeCache #-}
+
+nodeId :: Node -> Id
+nodeId (Node id_ _) = id_
 
 -- ------------------------------------------------------------------------
 
