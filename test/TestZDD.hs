@@ -202,6 +202,36 @@ prop_null_size =
     forAll arbitrary $ \(a :: ZDD o) ->
       ZDD.null a === (ZDD.size a == (0 :: Int))
 
+prop_isSubsetOf_refl :: Property
+prop_isSubsetOf_refl =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      a `ZDD.isSubsetOf` a
+
+prop_isSubsetOf_empty :: Property
+prop_isSubsetOf_empty =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      ZDD.empty `ZDD.isSubsetOf` a
+
+prop_isSubsetOf_and_isProperSubsetOf :: Property
+prop_isSubsetOf_and_isProperSubsetOf =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o, b) ->
+      (a `ZDD.isSubsetOf` b) === (a `ZDD.isProperSubsetOf` b || a == b)
+
+prop_isProperSubsetOf_not_refl :: Property
+prop_isProperSubsetOf_not_refl =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      not (ZDD.isProperSubsetOf a a)
+
+prop_disjoint :: Property
+prop_disjoint =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o, b) ->
+      ZDD.disjoint a b === ZDD.null (a `ZDD.intersection` b)
+
 -- ------------------------------------------------------------------------
 
 zddTestGroup :: TestTree

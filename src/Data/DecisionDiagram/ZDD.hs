@@ -40,6 +40,9 @@ module Data.DecisionDiagram.ZDD
   -- * Query
   , null
   , size
+  , isSubsetOf
+  , isProperSubsetOf
+  , disjoint
 
   -- * Combine
   , union
@@ -269,6 +272,18 @@ size (ZDD node) = runST $ do
             H.insert h p ret
             return ret
   f node
+
+-- | Is this the empty set?
+isSubsetOf :: ItemOrder a => ZDD a -> ZDD a -> Bool
+isSubsetOf a b = union a b == b
+
+-- | @(s1 `isProperSubsetOf` s2)@ indicates whether @s1@ is a proper subset of @s2@.
+isProperSubsetOf :: ItemOrder a => ZDD a -> ZDD a -> Bool
+isProperSubsetOf a b = a `isSubsetOf` b && a /= b
+
+-- | Check whether two sets are disjoint (i.e., their intersection is empty).
+disjoint :: ItemOrder a => ZDD a -> ZDD a -> Bool
+disjoint a b = null (a `intersection` b)
 
 -- | Convert the family to a set of 'IntSet'.
 toSetOfIntSets :: ZDD a -> Set IntSet
