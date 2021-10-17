@@ -161,10 +161,10 @@ prop_empty =
   withDefaultOrder $ \(_ :: Proxy o) ->
     ZDD.toSetOfIntSets (ZDD.empty :: ZDD o) === Set.empty
 
-prop_unit :: Property
-prop_unit =
+prop_base :: Property
+prop_base =
   withDefaultOrder $ \(_ :: Proxy o) ->
-    ZDD.toSetOfIntSets (ZDD.unit :: ZDD o) === Set.singleton IntSet.empty
+    ZDD.toSetOfIntSets (ZDD.base :: ZDD o) === Set.singleton IntSet.empty
 
 prop_change :: Property
 prop_change =

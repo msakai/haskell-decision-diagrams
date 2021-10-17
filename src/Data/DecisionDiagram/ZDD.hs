@@ -35,7 +35,7 @@ module Data.DecisionDiagram.ZDD
 
   -- * Construction
   , empty
-  , unit
+  , base
 
   -- * Query
   , null
@@ -111,8 +111,8 @@ empty :: ZDD a
 empty = ZDD F
 
 -- | The set containing only the empty set ({∅}).
-unit :: ZDD a
-unit = ZDD T
+base :: ZDD a
+base = ZDD T
 
 -- | Select subsets that contain a particular element and then remove the element from them
 subset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
