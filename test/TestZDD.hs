@@ -153,6 +153,51 @@ prop_difference_union =
       a ZDD.\\ (b `ZDD.union` c) === (a ZDD.\\ b) ZDD.\\ c
 
 -- ------------------------------------------------------------------------
+-- Non-superset
+-- ------------------------------------------------------------------------
+
+prop_nonSuperset :: Property
+prop_nonSuperset =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o, b) ->
+      let a' = ZDD.toSetOfIntSets a
+          b' = ZDD.toSetOfIntSets b
+          p xs = and [not (IntSet.isSubsetOf ys xs) | ys <- Set.toList b']
+       in ZDD.toSetOfIntSets (a `ZDD.nonSuperset` b) === Set.filter p a'
+
+prop_nonSuperset_cancel :: Property
+prop_nonSuperset_cancel =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      a `ZDD.nonSuperset` a === ZDD.empty
+
+prop_nonSuperset_unit :: Property
+prop_nonSuperset_unit =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      a `ZDD.nonSuperset` ZDD.empty === a
+
+prop_union_nonSuperset :: Property
+prop_union_nonSuperset =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o, b, c) ->
+      (a `ZDD.union` b) `ZDD.nonSuperset` c === (a `ZDD.nonSuperset` c) `ZDD.union` (b `ZDD.nonSuperset` c)
+
+prop_nonSuperset_union :: Property
+prop_nonSuperset_union =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o, b, c) ->
+      a `ZDD.nonSuperset` (b `ZDD.union` c) === (a `ZDD.nonSuperset` b) `ZDD.nonSuperset` c
+
+prop_nonSuperset_difference :: Property
+prop_nonSuperset_difference =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o, b) ->
+      let c = a `ZDD.nonSuperset` b
+          d = a ZDD.\\ b
+       in counterexample (show (c, d)) $ c `ZDD.isSubsetOf` d
+
+-- ------------------------------------------------------------------------
 -- Misc
 -- ------------------------------------------------------------------------
 

@@ -50,6 +50,7 @@ module Data.DecisionDiagram.ZDD
   , intersection
   , difference
   , (\\)
+  , nonSuperset
 
   -- * Filter
   , subset1
@@ -249,6 +250,34 @@ difference (ZDD node1) (ZDD node2) = runST $ do
 -- | See 'difference'
 (\\) :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 m1 \\ m2 = difference m1 m2
+
+-- | Given a family P and Q, it computes {S∈P | ∀X∈Q. X⊈S}
+--
+-- Sometimes it is denoted as /P ↘ Q/.
+nonSuperset :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
+nonSuperset (ZDD node1) (ZDD node2) = runST $ do
+  h <- C.newSized defaultTableSize
+  let f F _ = return F
+      f _ T = return F
+      f p F = return p
+      f p q | p == q = return F
+      f p q = do
+        m <- H.lookup h (p, q)
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            ret <- case zddCase2Node (Proxy :: Proxy a) p q of
+              ZDDCase2LT ptop p0 p1 -> liftM2 (zddNode ptop) (f p0 q) (f p1 q)
+              ZDDCase2GT _qtop q0 _q1 -> f p q0
+              ZDDCase2EQ top p0 p1 q0 q1 -> do
+                n0 <- f p1 q0
+                n1 <- f p1 q1
+                let ZDD r = intersection (ZDD n0 :: ZDD a) (ZDD n1) -- TODO: memoize intersection?
+                liftM2 (zddNode top) (f p0 q0) (pure r)
+            H.insert h (p, q) ret
+            return ret
+  ret <- f node1 node2
+  return (ZDD ret)
 
 -- | Is this the empty set?
 null :: ZDD a -> Bool
