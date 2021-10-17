@@ -1,14 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ViewPatterns #-}
 ----------------------------------------------------------------------
 -- |
 -- Module      :  Data.DecisionDiagram.BDD
@@ -19,7 +12,7 @@
 -- Stability   :  unstable
 -- Portability :  non-portable
 --
--- Reduced Ordered Binary Decision Diagrams (ROBDD) and its Zero-Suppressed variant.
+-- Reduced Ordered Binary Decision Diagrams (ROBDD).
 --
 -- References:
 --
@@ -28,16 +21,11 @@
 --   Aug. 1986, doi: [10.1109/TC.1986.1676819](https://doi.org/10.1109/TC.1986.1676819).
 --   <https://www.cs.cmu.edu/~bryant/pubdir/ieeetc86.pdf>
 --
--- * S. Minato, "Zero-Suppressed BDDs for Set Manipulation in Combinatorial Problems,"
---   30th ACM/IEEE Design Automation Conference, 1993, pp. 272-277,
---   doi: [10.1145/157485.164890](https://doi.org/10.1145/157485.164890).
---   <https://www.researchgate.net/publication/221062015_Zero-Suppressed_BDDs_for_Set_Manipulation_in_Combinatorial_Problems>
---
 ----------------------------------------------------------------------
 module Data.DecisionDiagram.BDD
   (
-  -- * Low level node type
-    Node (T, F, Branch)
+  -- * The BDD type
+    BDD (..)
 
   -- * Item ordering
   , ItemOrder (..)
@@ -45,119 +33,29 @@ module Data.DecisionDiagram.BDD
   , withDefaultOrder
   , withCustomOrder
 
-  -- * BDD
-  , BDD (..)
-  , bddTrue
-  , bddFalse
-  , bddVar
-  , bddNot
-  , bddAnd
-  , bddOr
-
-  -- * ZDD
-  , ZDD (..)
-  , zddEmpty
-  , zddUnit
-  , zddSubset1
-  , zddSubset0
-  , zddChange
-  , zddUnion
-  , zddIntersection
-  , zddDifference
-  , zddSize
-  , zddToSetOfIntSets
+  -- * Boolean operations
+  , true
+  , false
+  , var
+  , notB
+  , (.&&.)
+  , (.||.)
+  , andB
+  , orB
   ) where
 
 import Control.Monad
 import Control.Monad.ST
+import qualified Data.Foldable as Foldable
 import Data.Hashable
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
-import Data.Interned
 import Data.Proxy
-import Data.Reflection
-import Data.Set (Set)
-import qualified Data.Set as Set
--- import qualified GHC.Exts as Exts
-import GHC.Generics
-import Numeric.Natural
 
--- ------------------------------------------------------------------------
+import Data.DecisionDiagram.BDD.Internal
 
--- | Hash-consed node types in BDD or ZDD
-data Node = Node {-# UNPACK #-} !Id UNode
-  deriving (Show)
-
-instance Eq Node where
-  Node i _ == Node j _ = i == j
-
-instance Hashable Node where
-  hashWithSalt s (Node i _) = hashWithSalt s i
-
-pattern T :: Node
-pattern T <- (unintern -> UT) where
-  T = intern UT
-
-pattern F :: Node
-pattern F <- (unintern -> UF) where
-  F = intern UF
-
-pattern Branch :: Int -> Node -> Node -> Node
-pattern Branch ind lo hi <- (unintern -> UBranch ind lo hi) where
-  Branch ind lo hi = intern (UBranch ind lo hi)
-
-{-# COMPLETE T, F, Branch #-}
-
-data UNode
-  = UT
-  | UF
-  | UBranch {-# UNPACK #-} !Int Node Node
-  deriving (Show)
-
-instance Interned Node where
-  type Uninterned Node = UNode
-  data Description Node
-    = DT
-    | DF
-    | DBranch {-# UNPACK #-} !Int {-# UNPACK #-} !Id {-# UNPACK #-} !Id
-    deriving (Eq, Generic)
-  describe UT = DT
-  describe UF = DF
-  describe (UBranch x (Node i _) (Node j _)) = DBranch x i j
-  identify = Node
-  cache = nodeCache
-
-instance Hashable (Description Node)
-
-instance Uninternable Node where
-  unintern (Node _ uformula) = uformula
-
-nodeCache :: Cache Node
-nodeCache = mkCache
-{-# NOINLINE nodeCache #-}
-
--- ------------------------------------------------------------------------
-
-class ItemOrder a where
-  compareItem :: proxy a -> Int -> Int -> Ordering
-
-data DefaultOrder
-
-instance ItemOrder DefaultOrder where
-  compareItem _ = compare
-
-data CustomOrder a
-
-instance Reifies s (Int -> Int -> Ordering) => ItemOrder (CustomOrder s) where
-  compareItem _ = reflect (Proxy :: Proxy s)
-
-withDefaultOrder :: forall r. (forall a. ItemOrder a => Proxy a -> r) -> r
-withDefaultOrder k = k (Proxy :: Proxy DefaultOrder)
-
-withCustomOrder :: forall r. (Int -> Int -> Ordering) -> (forall a. ItemOrder a => Proxy a -> r) -> r
-withCustomOrder cmp k = reify cmp (\(_ :: Proxy s) -> k (Proxy :: Proxy (CustomOrder s)))
+infixr 3 .&&.
+infixr 2 .||.
 
 -- ------------------------------------------------------------------------
 
@@ -176,20 +74,20 @@ bddNode ind lo hi
   | otherwise = Branch ind lo hi
 
 -- | True
-bddTrue :: BDD a
-bddTrue = BDD T
+true :: BDD a
+true = BDD T
 
 -- | False
-bddFalse :: BDD a
-bddFalse = BDD F
+false :: BDD a
+false = BDD F
 
 -- | A variable \(x_i\)
-bddVar :: Int -> BDD a
-bddVar ind = BDD (Branch ind F T)
+var :: Int -> BDD a
+var ind = BDD (Branch ind F T)
 
 -- | Negation of a boolean function
-bddNot :: BDD a -> BDD a
-bddNot (BDD node) = runST $ do
+notB :: BDD a -> BDD a
+notB (BDD node) = runST $ do
   h <- C.newSized defaultTableSize
   let f T = return F
       f F = return T
@@ -205,8 +103,8 @@ bddNot (BDD node) = runST $ do
   return (BDD ret)
 
 -- | Conjunction of two boolean function
-bddAnd :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-bddAnd (BDD node1) (BDD node2) = runST $ do
+(.&&.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
+BDD node1 .&&. BDD node2 = runST $ do
   h <- C.newSized defaultTableSize
   let f T b = return b
       f F _ = return F
@@ -228,8 +126,8 @@ bddAnd (BDD node1) (BDD node2) = runST $ do
   return (BDD ret)
 
 -- | Disjunction of two boolean function
-bddOr :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-bddOr (BDD node1) (BDD node2) = runST $ do
+(.||.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
+BDD node1 .||. BDD node2 = runST $ do
   h <- C.newSized defaultTableSize
   let f T _ = return T
       f F b = return b
@@ -250,206 +148,23 @@ bddOr (BDD node1) (BDD node2) = runST $ do
   ret <- f node1 node2
   return (BDD ret)
 
+-- | Conjunction of a list of BDDs.
+andB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a
+andB xs = Foldable.foldl' (.&&.) true xs
+
+-- | Disjunction of a list of BDDs.
+orB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a
+orB xs = Foldable.foldl' (.||.) false xs
+
 -- https://ja.wikipedia.org/wiki/%E4%BA%8C%E5%88%86%E6%B1%BA%E5%AE%9A%E5%9B%B3
 _test_bdd :: BDD DefaultOrder
-_test_bdd = (bddNot x1 `bddAnd` bddNot x2 `bddAnd` bddNot x3) `bddOr` (x1 `bddAnd` x2) `bddOr` (x2 `bddAnd` x3)
+_test_bdd = (notB x1 .&&. notB x2 .&&. notB x3) .||. (x1 .&&. x2) .||. (x2 .&&. x3)
   where
-    x1 = bddVar 1
-    x2 = bddVar 2
-    x3 = bddVar 3
+    x1 = var 1
+    x2 = var 2
+    x3 = var 3
 {-
 BDD (Node 880 (UBranch 1 (Node 611 (UBranch 2 (Node 836 UT) (Node 215 UF))) (Node 806 (UBranch 2 (Node 842 (UBranch 3 (Node 836 UT) (Node 215 UF))) (Node 464 (UBranch 3 (Node 215 UF) (Node 836 UT)))))))
 -}
-
--- ------------------------------------------------------------------------
-
--- | Zero-suppressed binary decision diagram representing family of sets
-newtype ZDD a = ZDD Node
-  deriving (Hashable, Show)
-
-zddNode :: Int -> Node -> Node -> Node
-zddNode _ p0 F = p0
-zddNode top p0 p1 = Branch top p0 p1
-
-data ZDDCase2Node
-  = ZDDCase2LT Int Node Node
-  | ZDDCase2GT Int Node Node
-  | ZDDCase2EQ Int Node Node Node Node
-
-zddCase2Node :: forall a. ItemOrder a => Proxy a -> Node -> Node -> ZDDCase2Node
-zddCase2Node _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
-  case compareItem (Proxy :: Proxy a) ptop qtop of
-    LT -> ZDDCase2LT ptop p0 p1
-    GT -> ZDDCase2GT qtop q0 q1
-    EQ -> ZDDCase2EQ ptop q0 q1 q0 q1
-zddCase2Node _ (Branch ptop p0 p1) _ = ZDDCase2LT ptop p0 p1
-zddCase2Node _ _ (Branch qtop q0 q1) = ZDDCase2GT qtop q0 q1
-zddCase2Node _ _ _ = error "should not happen"
-
--- | The empty set (∅).
-zddEmpty :: ZDD a
-zddEmpty = ZDD F
-
--- | The set containing only the empty set ({∅}).
-zddUnit :: ZDD a
-zddUnit = ZDD T
-
--- | Subsets that contain a particular element
-zddSubset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
-zddSubset1 var (ZDD node) = runST $ do
-  h <- C.newSized defaultTableSize
-  let f T = return F
-      f F = return F
-      f p@(Branch top p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            ret <- case compareItem (Proxy :: Proxy a) top var of
-              GT -> return F
-              EQ -> return p1
-              LT -> liftM2 (zddNode top) (f p0) (f p1)
-            H.insert h p ret
-            return ret
-  ret <- f node
-  return (ZDD ret)
-
--- | Subsets that does not contain a particular element
-zddSubset0 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
-zddSubset0 var (ZDD node) = runST $ do
-  h <- C.newSized defaultTableSize
-  let f p@T = return p
-      f F = return F
-      f p@(Branch top p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            ret <- case compareItem (Proxy :: Proxy a) top var of
-              GT -> return p
-              EQ -> return p0
-              LT -> liftM2 (zddNode top) (f p0) (f p1)
-            H.insert h p ret
-            return ret
-  ret <- f node
-  return (ZDD ret)
-
--- | @zddChange x p@ returns {if x∈s then s∖{x} else s∪{x} | s∈P}
-zddChange :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
-zddChange var (ZDD node) = runST $ do
-  h <- C.newSized defaultTableSize
-  let f p@T = return p
-      f F = return F
-      f p@(Branch top p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            ret <- case compareItem (Proxy :: Proxy a) top var of
-              GT -> return (zddNode var F p)
-              EQ -> return (zddNode var p1 p0)
-              LT -> liftM2 (zddNode top) (f p0) (f p1)
-            H.insert h p ret
-            return ret
-  ret <- f node
-  return (ZDD ret)
-
--- | Union of two family of sets.
-zddUnion :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
-zddUnion (ZDD node1) (ZDD node2) = runST $ do
-  h <- C.newSized defaultTableSize
-  let f F q = return q
-      f p F = return p
-      f p q | p == q = return p
-      f p q = do
-        m <- H.lookup h (p, q)
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            ret <- case zddCase2Node (Proxy :: Proxy a) p q of
-              ZDDCase2LT ptop p0 p1 -> liftM2 (zddNode ptop) (f p0 q) (pure p1)
-              ZDDCase2GT qtop q0 q1 -> liftM2 (zddNode qtop) (f p q0) (pure q1)
-              ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (zddNode top) (f p0 q0) (f p1 q1)
-            H.insert h (p, q) ret
-            return ret
-  ret <- f node1 node2
-  return (ZDD ret)
-
--- | Intersection of two family of sets.
-zddIntersection :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
-zddIntersection (ZDD node1) (ZDD node2) = runST $ do
-  h <- C.newSized defaultTableSize
-  let f F _q = return F
-      f _p F = return F
-      f p q | p == q = return p
-      f p q = do
-        m <- H.lookup h (p, q)
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            ret <- case zddCase2Node (Proxy :: Proxy a) p q of
-              ZDDCase2LT _ptop p0 _p1 -> f p0 q
-              ZDDCase2GT _qtop q0 _q1 -> f p q0
-              ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (zddNode top) (f p0 q0) (f p1 q1)
-            H.insert h (p, q) ret
-            return ret
-  ret <- f node1 node2
-  return (ZDD ret)
-
--- | Difference of two family of sets.
-zddDifference :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
-zddDifference (ZDD node1) (ZDD node2) = runST $ do
-  h <- C.newSized defaultTableSize
-  let f F _ = return F
-      f p F = return p
-      f p q | p == q = return F
-      f p q = do
-        m <- H.lookup h (p, q)
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            ret <- case zddCase2Node (Proxy :: Proxy a) p q of
-              ZDDCase2LT ptop p0 p1 -> liftM2 (zddNode ptop) (f p0 q) (pure p1)
-              ZDDCase2GT _qtop q0 _q1 -> f p q0
-              ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (zddNode top) (f p0 q0) (f p1 q1)
-            H.insert h (p, q) ret
-            return ret
-  ret <- f node1 node2
-  return (ZDD ret)
-
-{-# SPECIALIZE zddSize :: ZDD a -> Int #-}
-{-# SPECIALIZE zddSize :: ZDD a -> Integer #-}
-{-# SPECIALIZE zddSize :: ZDD a -> Natural #-}
--- | The number of sets in the family.
-zddSize :: (Integral b) => ZDD a -> b
-zddSize (ZDD node) = runST $ do
-  h <- C.newSized defaultTableSize
-  let f F = return 0
-      f T = return 1
-      f p@(Branch _ p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            ret <- liftM2 (+) (f p0) (f p1)
-            H.insert h p ret
-            return ret
-  f node
-
--- | Convert the family to a set of 'IntSet'.
-zddToSetOfIntSets :: ZDD a -> Set IntSet
-zddToSetOfIntSets (ZDD node) = runST $ do
-  h <- C.newSized defaultTableSize
-  let f F = return Set.empty
-      f T = return (Set.singleton IntSet.empty)
-      f p@(Branch top p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            ret <- liftM2 Set.union (f p0) (liftM (Set.map (IntSet.insert top)) (f p1))
-            H.insert h p ret
-            return ret
-  f node
 
 -- ------------------------------------------------------------------------
