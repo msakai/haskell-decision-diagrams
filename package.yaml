@@ -33,7 +33,7 @@ library:
 
 tests:
   decision-diagrams-test:
-    main:                Spec.hs
+    main:                TestSuite.hs
     source-dirs:         test
     ghc-options:
     - -threaded
@@ -41,3 +41,7 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - decision-diagrams
+    - tasty >=0.10.1
+    - tasty-hunit >=0.9 && <0.11
+    - tasty-quickcheck >=0.8 && <0.11
+    - tasty-th
