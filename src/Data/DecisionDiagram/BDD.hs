@@ -24,24 +24,29 @@
 ----------------------------------------------------------------------
 module Data.DecisionDiagram.BDD
   (
+  -- * The BDD type
+    BDD (..)
+
   -- * Item ordering
-    ItemOrder (..)
+  , ItemOrder (..)
   , DefaultOrder
   , withDefaultOrder
   , withCustomOrder
 
-  -- * BDD
-  , BDD (..)
+  -- * Boolean operations
   , true
   , false
   , var
   , notB
   , (.&&.)
   , (.||.)
+  , andB
+  , orB
   ) where
 
 import Control.Monad
 import Control.Monad.ST
+import qualified Data.Foldable as Foldable
 import Data.Hashable
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
@@ -142,6 +147,14 @@ BDD node1 .||. BDD node2 = runST $ do
             return ret
   ret <- f node1 node2
   return (BDD ret)
+
+-- | Conjunction of a list of BDDs.
+andB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a
+andB xs = Foldable.foldl' (.&&.) true xs
+
+-- | Disjunction of a list of BDDs.
+orB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a
+orB xs = Foldable.foldl' (.||.) false xs
 
 -- https://ja.wikipedia.org/wiki/%E4%BA%8C%E5%88%86%E6%B1%BA%E5%AE%9A%E5%9B%B3
 _test_bdd :: BDD DefaultOrder

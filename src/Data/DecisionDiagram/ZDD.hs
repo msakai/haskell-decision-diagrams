@@ -37,18 +37,22 @@ module Data.DecisionDiagram.ZDD
   , empty
   , unit
 
+  -- * Query
+  , size
+
   -- * Combine
   , union
+  , unions
   , intersection
   , difference
+  , (\\)
+
+  -- * Filter
+  , subset1
+  , subset0
 
   -- * Update
   , change
-
-  -- * Query
-  , subset1
-  , subset0
-  , size
 
   -- * Conversion
   , toSetOfIntSets
@@ -56,6 +60,7 @@ module Data.DecisionDiagram.ZDD
 
 import Control.Monad
 import Control.Monad.ST
+import qualified Data.Foldable as Foldable
 import Data.Hashable
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
@@ -187,6 +192,10 @@ union (ZDD node1) (ZDD node2) = runST $ do
   ret <- f node1 node2
   return (ZDD ret)
 
+-- | Unions of a list of ZDDs.
+unions :: forall f a. (Foldable f, ItemOrder a) => f (ZDD a) -> ZDD a
+unions xs = Foldable.foldl' union empty xs
+
 -- | Intersection of two family of sets.
 intersection :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 intersection (ZDD node1) (ZDD node2) = runST $ do
@@ -228,6 +237,10 @@ difference (ZDD node1) (ZDD node2) = runST $ do
             return ret
   ret <- f node1 node2
   return (ZDD ret)
+
+-- | See 'difference'
+(\\) :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
+m1 \\ m2 = difference m1 m2
 
 {-# SPECIALIZE size :: ZDD a -> Int #-}
 {-# SPECIALIZE size :: ZDD a -> Integer #-}
