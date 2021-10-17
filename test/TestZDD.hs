@@ -196,6 +196,12 @@ prop_size =
     forAll arbitrary $ \(a :: ZDD o) ->
       ZDD.size a === Set.size (ZDD.toSetOfIntSets a)
 
+prop_null_size :: Property
+prop_null_size =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      ZDD.null a === (ZDD.size a == (0 :: Int))
+
 -- ------------------------------------------------------------------------
 
 zddTestGroup :: TestTree

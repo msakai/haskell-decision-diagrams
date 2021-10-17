@@ -38,6 +38,7 @@ module Data.DecisionDiagram.ZDD
   , unit
 
   -- * Query
+  , null
   , size
 
   -- * Combine
@@ -57,6 +58,8 @@ module Data.DecisionDiagram.ZDD
   -- * Conversion
   , toSetOfIntSets
   ) where
+
+import Prelude hiding (null)
 
 import Control.Monad
 import Control.Monad.ST
@@ -243,6 +246,10 @@ difference (ZDD node1) (ZDD node2) = runST $ do
 -- | See 'difference'
 (\\) :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 m1 \\ m2 = difference m1 m2
+
+-- | Is this the empty set?
+null :: ZDD a -> Bool
+null = (empty ==)
 
 {-# SPECIALIZE size :: ZDD a -> Int #-}
 {-# SPECIALIZE size :: ZDD a -> Integer #-}
