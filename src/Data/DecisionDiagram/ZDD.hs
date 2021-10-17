@@ -155,7 +155,7 @@ subset0 var (ZDD node) = runST $ do
 change :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 change var (ZDD node) = runST $ do
   h <- C.newSized defaultTableSize
-  let f p@T = return p
+  let f p@T = return (zddNode var F p)
       f F = return F
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
