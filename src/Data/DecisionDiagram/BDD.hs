@@ -32,12 +32,12 @@ module Data.DecisionDiagram.BDD
 
   -- * BDD
   , BDD (..)
-  , bddTrue
-  , bddFalse
-  , bddVar
-  , bddNot
-  , bddAnd
-  , bddOr
+  , true
+  , false
+  , var
+  , notB
+  , (.&&.)
+  , (.||.)
   ) where
 
 import Control.Monad
@@ -48,6 +48,9 @@ import qualified Data.HashTable.ST.Cuckoo as C
 import Data.Proxy
 
 import Data.DecisionDiagram.BDD.Internal
+
+infixr 3 .&&.
+infixr 2 .||.
 
 -- ------------------------------------------------------------------------
 
@@ -66,20 +69,20 @@ bddNode ind lo hi
   | otherwise = Branch ind lo hi
 
 -- | True
-bddTrue :: BDD a
-bddTrue = BDD T
+true :: BDD a
+true = BDD T
 
 -- | False
-bddFalse :: BDD a
-bddFalse = BDD F
+false :: BDD a
+false = BDD F
 
 -- | A variable \(x_i\)
-bddVar :: Int -> BDD a
-bddVar ind = BDD (Branch ind F T)
+var :: Int -> BDD a
+var ind = BDD (Branch ind F T)
 
 -- | Negation of a boolean function
-bddNot :: BDD a -> BDD a
-bddNot (BDD node) = runST $ do
+notB :: BDD a -> BDD a
+notB (BDD node) = runST $ do
   h <- C.newSized defaultTableSize
   let f T = return F
       f F = return T
@@ -95,8 +98,8 @@ bddNot (BDD node) = runST $ do
   return (BDD ret)
 
 -- | Conjunction of two boolean function
-bddAnd :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-bddAnd (BDD node1) (BDD node2) = runST $ do
+(.&&.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
+BDD node1 .&&. BDD node2 = runST $ do
   h <- C.newSized defaultTableSize
   let f T b = return b
       f F _ = return F
@@ -118,8 +121,8 @@ bddAnd (BDD node1) (BDD node2) = runST $ do
   return (BDD ret)
 
 -- | Disjunction of two boolean function
-bddOr :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-bddOr (BDD node1) (BDD node2) = runST $ do
+(.||.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
+BDD node1 .||. BDD node2 = runST $ do
   h <- C.newSized defaultTableSize
   let f T _ = return T
       f F b = return b
@@ -142,11 +145,11 @@ bddOr (BDD node1) (BDD node2) = runST $ do
 
 -- https://ja.wikipedia.org/wiki/%E4%BA%8C%E5%88%86%E6%B1%BA%E5%AE%9A%E5%9B%B3
 _test_bdd :: BDD DefaultOrder
-_test_bdd = (bddNot x1 `bddAnd` bddNot x2 `bddAnd` bddNot x3) `bddOr` (x1 `bddAnd` x2) `bddOr` (x2 `bddAnd` x3)
+_test_bdd = (notB x1 .&&. notB x2 .&&. notB x3) .||. (x1 .&&. x2) .||. (x2 .&&. x3)
   where
-    x1 = bddVar 1
-    x2 = bddVar 2
-    x3 = bddVar 3
+    x1 = var 1
+    x2 = var 2
+    x3 = var 3
 {-
 BDD (Node 880 (UBranch 1 (Node 611 (UBranch 2 (Node 836 UT) (Node 215 UF))) (Node 806 (UBranch 2 (Node 842 (UBranch 3 (Node 836 UT) (Node 215 UF))) (Node 464 (UBranch 3 (Node 215 UF) (Node 836 UT)))))))
 -}

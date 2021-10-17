@@ -32,16 +32,16 @@ module Data.DecisionDiagram.ZDD
 
   -- * ZDD
   , ZDD (..)
-  , zddEmpty
-  , zddUnit
-  , zddSubset1
-  , zddSubset0
-  , zddChange
-  , zddUnion
-  , zddIntersection
-  , zddDifference
-  , zddSize
-  , zddToSetOfIntSets
+  , empty
+  , unit
+  , subset1
+  , subset0
+  , change
+  , union
+  , intersection
+  , difference
+  , size
+  , toSetOfIntSets
   ) where
 
 import Control.Monad
@@ -89,16 +89,16 @@ zddCase2Node _ _ (Branch qtop q0 q1) = ZDDCase2GT qtop q0 q1
 zddCase2Node _ _ _ = error "should not happen"
 
 -- | The empty set (∅).
-zddEmpty :: ZDD a
-zddEmpty = ZDD F
+empty :: ZDD a
+empty = ZDD F
 
 -- | The set containing only the empty set ({∅}).
-zddUnit :: ZDD a
-zddUnit = ZDD T
+unit :: ZDD a
+unit = ZDD T
 
 -- | Subsets that contain a particular element
-zddSubset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
-zddSubset1 var (ZDD node) = runST $ do
+subset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
+subset1 var (ZDD node) = runST $ do
   h <- C.newSized defaultTableSize
   let f T = return F
       f F = return F
@@ -117,8 +117,8 @@ zddSubset1 var (ZDD node) = runST $ do
   return (ZDD ret)
 
 -- | Subsets that does not contain a particular element
-zddSubset0 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
-zddSubset0 var (ZDD node) = runST $ do
+subset0 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
+subset0 var (ZDD node) = runST $ do
   h <- C.newSized defaultTableSize
   let f p@T = return p
       f F = return F
@@ -136,9 +136,9 @@ zddSubset0 var (ZDD node) = runST $ do
   ret <- f node
   return (ZDD ret)
 
--- | @zddChange x p@ returns {if x∈s then s∖{x} else s∪{x} | s∈P}
-zddChange :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
-zddChange var (ZDD node) = runST $ do
+-- | @change x p@ returns {if x∈s then s∖{x} else s∪{x} | s∈P}
+change :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
+change var (ZDD node) = runST $ do
   h <- C.newSized defaultTableSize
   let f p@T = return p
       f F = return F
@@ -157,8 +157,8 @@ zddChange var (ZDD node) = runST $ do
   return (ZDD ret)
 
 -- | Union of two family of sets.
-zddUnion :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
-zddUnion (ZDD node1) (ZDD node2) = runST $ do
+union :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
+union (ZDD node1) (ZDD node2) = runST $ do
   h <- C.newSized defaultTableSize
   let f F q = return q
       f p F = return p
@@ -178,8 +178,8 @@ zddUnion (ZDD node1) (ZDD node2) = runST $ do
   return (ZDD ret)
 
 -- | Intersection of two family of sets.
-zddIntersection :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
-zddIntersection (ZDD node1) (ZDD node2) = runST $ do
+intersection :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
+intersection (ZDD node1) (ZDD node2) = runST $ do
   h <- C.newSized defaultTableSize
   let f F _q = return F
       f _p F = return F
@@ -199,8 +199,8 @@ zddIntersection (ZDD node1) (ZDD node2) = runST $ do
   return (ZDD ret)
 
 -- | Difference of two family of sets.
-zddDifference :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
-zddDifference (ZDD node1) (ZDD node2) = runST $ do
+difference :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
+difference (ZDD node1) (ZDD node2) = runST $ do
   h <- C.newSized defaultTableSize
   let f F _ = return F
       f p F = return p
@@ -219,12 +219,12 @@ zddDifference (ZDD node1) (ZDD node2) = runST $ do
   ret <- f node1 node2
   return (ZDD ret)
 
-{-# SPECIALIZE zddSize :: ZDD a -> Int #-}
-{-# SPECIALIZE zddSize :: ZDD a -> Integer #-}
-{-# SPECIALIZE zddSize :: ZDD a -> Natural #-}
+{-# SPECIALIZE size :: ZDD a -> Int #-}
+{-# SPECIALIZE size :: ZDD a -> Integer #-}
+{-# SPECIALIZE size :: ZDD a -> Natural #-}
 -- | The number of sets in the family.
-zddSize :: (Integral b) => ZDD a -> b
-zddSize (ZDD node) = runST $ do
+size :: (Integral b) => ZDD a -> b
+size (ZDD node) = runST $ do
   h <- C.newSized defaultTableSize
   let f F = return 0
       f T = return 1
@@ -239,8 +239,8 @@ zddSize (ZDD node) = runST $ do
   f node
 
 -- | Convert the family to a set of 'IntSet'.
-zddToSetOfIntSets :: ZDD a -> Set IntSet
-zddToSetOfIntSets (ZDD node) = runST $ do
+toSetOfIntSets :: ZDD a -> Set IntSet
+toSetOfIntSets (ZDD node) = runST $ do
   h <- C.newSized defaultTableSize
   let f F = return Set.empty
       f T = return (Set.singleton IntSet.empty)
