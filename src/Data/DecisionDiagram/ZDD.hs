@@ -24,23 +24,33 @@
 ----------------------------------------------------------------------
 module Data.DecisionDiagram.ZDD
   (
+  -- * ZDD type
+    ZDD (..)
+
   -- * Item ordering
-    ItemOrder (..)
+  , ItemOrder (..)
   , DefaultOrder
   , withDefaultOrder
   , withCustomOrder
 
-  -- * ZDD
-  , ZDD (..)
+  -- * Construction
   , empty
   , unit
-  , subset1
-  , subset0
-  , change
+
+  -- * Combine
   , union
   , intersection
   , difference
+
+  -- * Update
+  , change
+
+  -- * Query
+  , subset1
+  , subset0
   , size
+
+  -- * Conversion
   , toSetOfIntSets
   ) where
 
