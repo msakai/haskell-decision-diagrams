@@ -82,7 +82,7 @@ defaultTableSize = 256
 
 -- | Zero-suppressed binary decision diagram representing family of sets
 newtype ZDD a = ZDD Node
-  deriving (Hashable, Show)
+  deriving (Eq, Hashable, Show)
 
 zddNode :: Int -> Node -> Node -> Node
 zddNode _ p0 F = p0

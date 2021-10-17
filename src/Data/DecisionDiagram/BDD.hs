@@ -66,7 +66,7 @@ defaultTableSize = 256
 
 -- | Reduced ordered binary decision diagram representing boolean function
 newtype BDD a = BDD Node
-  deriving (Hashable, Show)
+  deriving (Eq, Hashable, Show)
 
 bddNode :: Int -> Node -> Node -> Node
 bddNode ind lo hi
