@@ -59,6 +59,11 @@ module Data.DecisionDiagram.ZDD
   -- * Update
   , change
 
+  -- * Minimal hitting sets
+  , minimalHittingSets
+  , minimalHittingSetsKnuth
+  , minimalHittingSetsImai
+
   -- * Conversion
   , toSetOfIntSets
   ) where
@@ -278,6 +283,46 @@ nonSuperset (ZDD node1) (ZDD node2) = runST $ do
             return ret
   ret <- f node1 node2
   return (ZDD ret)
+
+minimalHittingSets' :: forall a. ItemOrder a => Bool -> ZDD a -> ZDD a
+minimalHittingSets' imai (ZDD node) = runST $ do
+  h <- C.newSized defaultTableSize
+  let f F = return T
+      f T = return F
+      f p@(Branch top p0 p1) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            -- TODO: memoize union and difference/nonSuperset?
+            r0 <- case union (ZDD p0) (ZDD p1) :: ZDD a of
+                    ZDD r -> f r
+            ZDD r1 <- liftM2 (if imai then difference else nonSuperset) (liftM ZDD (f p0)) (pure (ZDD r0 :: ZDD a))
+            let ret = zddNode top r0 r1
+            H.insert h p ret
+            return ret
+  ret <- f node
+  return (ZDD ret)
+
+-- | Minimal hitting sets.
+--
+-- D. E. Knuth, "The Art of Computer Programming, Volume 4A:
+-- Combinatorial Algorithms, Part 1," Addison-Wesley Professional,
+-- 2011.
+minimalHittingSetsKnuth :: forall a. ItemOrder a => ZDD a -> ZDD a
+minimalHittingSetsKnuth = minimalHittingSets' False
+
+-- | Minimal hitting sets.
+--
+-- T. Imai, "One-line hack of knuth's algorithm for minimal hitting set
+-- computation with ZDDs," vol. 2015-AL-155, no. 15, Nov. 2015, pp. 1-3.
+-- [Online]. Available: <http://id.nii.ac.jp/1001/00145799/>.
+minimalHittingSetsImai :: forall a. ItemOrder a => ZDD a -> ZDD a
+minimalHittingSetsImai = minimalHittingSets' True
+
+-- | See 'minimalHittingSetsImai'.
+minimalHittingSets :: forall a. ItemOrder a => ZDD a -> ZDD a
+minimalHittingSets = minimalHittingSetsImai
 
 -- | Is this the empty set?
 null :: ZDD a -> Bool

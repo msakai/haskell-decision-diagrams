@@ -4,9 +4,11 @@
 module TestZDD (zddTestGroup) where
 
 import Control.Monad
+import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List
 import Data.Proxy
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Test.Tasty
 import Test.Tasty.QuickCheck
@@ -196,6 +198,51 @@ prop_nonSuperset_difference =
       let c = a `ZDD.nonSuperset` b
           d = a ZDD.\\ b
        in counterexample (show (c, d)) $ c `ZDD.isSubsetOf` d
+
+-- ------------------------------------------------------------------------
+-- Minimal hitting sets
+-- ------------------------------------------------------------------------
+
+isHittingSetOf :: IntSet -> Set IntSet -> Bool
+isHittingSetOf s g = all (\e -> not (IntSet.null (s `IntSet.intersection` e))) g
+
+prop_minimalHittingSetsKnuth_isHittingSet :: Property
+prop_minimalHittingSetsKnuth_isHittingSet =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      let b = ZDD.minimalHittingSetsKnuth a
+          a' = ZDD.toSetOfIntSets a
+          b' = ZDD.toSetOfIntSets b
+       in all (`isHittingSetOf` a') b'
+
+prop_minimalHittingSetsImai_isHittingSet :: Property
+prop_minimalHittingSetsImai_isHittingSet =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      let b = ZDD.minimalHittingSetsImai a
+          a' = ZDD.toSetOfIntSets a
+          b' = ZDD.toSetOfIntSets b
+       in all (`isHittingSetOf` a') b'
+
+prop_minimalHittingSetsKnuth_duality :: Property
+prop_minimalHittingSetsKnuth_duality =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      let b = ZDD.minimalHittingSetsKnuth a
+       in ZDD.minimalHittingSetsKnuth (ZDD.minimalHittingSetsKnuth b) === b
+
+prop_minimalHittingSetsImai_duality :: Property
+prop_minimalHittingSetsImai_duality =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      let b = ZDD.minimalHittingSetsImai a
+       in ZDD.minimalHittingSetsImai (ZDD.minimalHittingSetsImai b) === b
+
+prop_minimalHittingSets_Imai_equal_Knuth :: Property
+prop_minimalHittingSets_Imai_equal_Knuth =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      ZDD.minimalHittingSetsImai a === ZDD.minimalHittingSetsKnuth a
 
 -- ------------------------------------------------------------------------
 -- Misc
