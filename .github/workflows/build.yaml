@@ -1,0 +1,63 @@
+on: [push, pull_request]
+name: build
+jobs:
+  build:
+    name: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        ghc: ['8.4.4', '8.6.5', '8.8.4', '8.10.7', '9.0.1']
+        os: [ubuntu-latest]
+        include:
+          - ghc: '8.4.4'
+            resolver: 'lts-12.26'
+            flags: ''
+          - ghc: '8.6.5'
+            resolver: 'lts-14.27'
+            flags: ''
+          - ghc: '8.8.4'
+            resolver: 'lts-16.31'
+            flags: ''
+          - ghc: '8.10.7'
+            resolver: 'lts-18.12'
+            coveralls: true
+            flags: '--coverage'
+          - ghc: '9.0.1'
+            resolver: 'nightly-2021-10-13'
+            flags: ''
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: haskell/actions/setup@v1
+        name: Setup Haskell
+        with:
+          ghc-version: ${{ matrix.ghc }}
+          enable-stack: true
+          stack-version: 'latest'
+          stack-no-global: true
+          stack-setup-ghc: true
+
+      - uses: actions/cache@v1
+        name: Cache ~/.stack
+        with:
+          path: ~/.stack
+          key: ${{ runner.os }}-${{ matrix.ghc }}-stack
+
+      - name: Build
+        run: |
+          echo "resolver: ${{ matrix.resolver }}" > stack.yaml
+          stack build --test --no-run-tests --bench --no-run-benchmarks ${{ matrix.flags }}
+      - name: Test
+        run: stack test ${{ matrix.flags }}
+
+      - name: Create source tarball
+        run: stack sdist
+
+      - name: Coveralls
+        if: matrix.coveralls
+        continue-on-error: true
+        env:
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+        run: |
+          curl -L https://github.com/lehins/stack-hpc-coveralls/releases/download/v0.0.6.0/shc.tar.gz | tar -xz
+          ./shc --repo-token="$COVERALLS_REPO_TOKEN" decision-diagrams decision-diagrams-test
