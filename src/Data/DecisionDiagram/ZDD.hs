@@ -111,7 +111,7 @@ empty = ZDD F
 unit :: ZDD a
 unit = ZDD T
 
--- | Subsets that contain a particular element
+-- | Select subsets that contain a particular element and then remove the element from them
 subset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 subset1 var (ZDD node) = runST $ do
   h <- C.newSized defaultTableSize
