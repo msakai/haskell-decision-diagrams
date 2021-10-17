@@ -98,7 +98,7 @@ zddCase2Node _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
   case compareItem (Proxy :: Proxy a) ptop qtop of
     LT -> ZDDCase2LT ptop p0 p1
     GT -> ZDDCase2GT qtop q0 q1
-    EQ -> ZDDCase2EQ ptop q0 q1 q0 q1
+    EQ -> ZDDCase2EQ ptop p0 p1 q0 q1
 zddCase2Node _ (Branch ptop p0 p1) _ = ZDDCase2LT ptop p0 p1
 zddCase2Node _ _ (Branch qtop q0 q1) = ZDDCase2GT qtop q0 q1
 zddCase2Node _ _ _ = error "should not happen"
