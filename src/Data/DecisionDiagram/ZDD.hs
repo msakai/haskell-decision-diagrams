@@ -61,6 +61,7 @@ module Data.DecisionDiagram.ZDD
 
   -- * Minimal hitting sets
   , minimalHittingSets
+  , minimalHittingSetsToda
   , minimalHittingSetsKnuth
   , minimalHittingSetsImai
 
@@ -84,6 +85,7 @@ import qualified Data.Set as Set
 import Numeric.Natural
 
 import Data.DecisionDiagram.BDD.Internal
+import qualified Data.DecisionDiagram.BDD as BDD
 
 -- ------------------------------------------------------------------------
 
@@ -319,6 +321,60 @@ minimalHittingSetsKnuth = minimalHittingSets' False
 -- [Online]. Available: <http://id.nii.ac.jp/1001/00145799/>.
 minimalHittingSetsImai :: forall a. ItemOrder a => ZDD a -> ZDD a
 minimalHittingSetsImai = minimalHittingSets' True
+
+-- | Minimal hitting sets.
+--
+-- * T. Toda, “Hypergraph Transversal Computation with Binary Decision Diagrams,”
+--   SEA 2013: Experimental Algorithms.
+--   Available: <http://dx.doi.org/10.1007/978-3-642-38527-8_10>.
+--
+-- * HTC-BDD: Hypergraph Transversal Computation with Binary Decision Diagrams
+--   <https://www.disc.lab.uec.ac.jp/toda/htcbdd.html>
+minimalHittingSetsToda :: forall a. ItemOrder a => ZDD a -> ZDD a
+minimalHittingSetsToda = minimal . hittingSetsBDD
+
+hittingSetsBDD :: forall a. ItemOrder a => ZDD a -> BDD.BDD a
+hittingSetsBDD(ZDD node) = runST $ do
+  h <- C.newSized defaultTableSize
+  let f F = return BDD.true
+      f T = return BDD.false
+      f p@(Branch top p0 p1) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            BDD.BDD h0 <- f p0
+            BDD.BDD h1 <- f p1
+            let ret = BDD.BDD h0 BDD..&&. BDD.BDD (bddNode top h1 T)
+            H.insert h p ret
+            return ret
+  ret <- f node
+  return ret
+  where
+    -- XXX
+    bddNode :: Int -> Node -> Node -> Node
+    bddNode ind lo hi
+      | lo == hi = lo
+      | otherwise = Branch ind lo hi
+
+minimal :: forall a. ItemOrder a => BDD.BDD a -> ZDD a
+minimal (BDD.BDD node) = runST $ do
+  h <- C.newSized defaultTableSize
+  let f F = return F
+      f T = return T
+      f p@(Branch x lo hi) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            ml <- f lo
+            mh <- f hi
+            let ZDD t = difference (ZDD mh :: ZDD a) (ZDD ml)
+                ret = zddNode x ml t
+            H.insert h p ret
+            return ret
+  ret <- f node
+  return (ZDD ret)
 
 -- | See 'minimalHittingSetsImai'.
 minimalHittingSets :: forall a. ItemOrder a => ZDD a -> ZDD a

@@ -224,6 +224,15 @@ prop_minimalHittingSetsImai_isHittingSet =
           b' = ZDD.toSetOfIntSets b
        in all (`isHittingSetOf` a') b'
 
+prop_minimalHittingSetsToda_isHittingSet :: Property
+prop_minimalHittingSetsToda_isHittingSet =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      let b = ZDD.minimalHittingSetsToda a
+          a' = ZDD.toSetOfIntSets a
+          b' = ZDD.toSetOfIntSets b
+       in all (`isHittingSetOf` a') b'
+
 prop_minimalHittingSetsKnuth_duality :: Property
 prop_minimalHittingSetsKnuth_duality =
   withDefaultOrder $ \(_ :: Proxy o) ->
@@ -238,11 +247,24 @@ prop_minimalHittingSetsImai_duality =
       let b = ZDD.minimalHittingSetsImai a
        in ZDD.minimalHittingSetsImai (ZDD.minimalHittingSetsImai b) === b
 
+prop_minimalHittingSetsToda_duality :: Property
+prop_minimalHittingSetsToda_duality =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      let b = ZDD.minimalHittingSetsToda a
+       in ZDD.minimalHittingSetsToda (ZDD.minimalHittingSetsToda b) === b
+
 prop_minimalHittingSets_Imai_equal_Knuth :: Property
 prop_minimalHittingSets_Imai_equal_Knuth =
   withDefaultOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(a :: ZDD o) ->
       ZDD.minimalHittingSetsImai a === ZDD.minimalHittingSetsKnuth a
+
+prop_minimalHittingSets_Toda_equal_Knuth :: Property
+prop_minimalHittingSets_Toda_equal_Knuth =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      ZDD.minimalHittingSetsToda a === ZDD.minimalHittingSetsKnuth a
 
 -- ------------------------------------------------------------------------
 -- Misc
