@@ -36,6 +36,7 @@ module Data.DecisionDiagram.ZDD
   -- * Construction
   , empty
   , base
+  , fromSetOfIntSets
 
   -- * Query
   , null
@@ -79,6 +80,7 @@ import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
+import Data.List (sortBy)
 import Data.Proxy
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -414,6 +416,15 @@ isProperSubsetOf a b = a `isSubsetOf` b && a /= b
 -- | Check whether two sets are disjoint (i.e., their intersection is empty).
 disjoint :: ItemOrder a => ZDD a -> ZDD a -> Bool
 disjoint a b = null (a `intersection` b)
+
+-- | Create a ZDD from a set of 'IntSet'
+fromSetOfIntSets :: forall a. ItemOrder a => Set IntSet -> ZDD a
+fromSetOfIntSets xss = unions
+  [ ZDD $ foldr (\x node -> Branch x F node) T
+        $ sortBy (compareItem (Proxy :: Proxy a))
+        $ IntSet.toList xs
+  | xs <- Set.toList xss
+  ]    
 
 -- | Convert the family to a set of 'IntSet'.
 toSetOfIntSets :: ZDD a -> Set IntSet

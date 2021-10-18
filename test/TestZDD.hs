@@ -280,6 +280,21 @@ prop_base =
   withDefaultOrder $ \(_ :: Proxy o) ->
     ZDD.toSetOfIntSets (ZDD.base :: ZDD o) === Set.singleton IntSet.empty
 
+prop_toSetOfIntSets_fromSetOfIntSets :: Property
+prop_toSetOfIntSets_fromSetOfIntSets =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll (liftM (Set.fromList . map IntSet.fromList) arbitrary) $ \xss ->
+      let a :: ZDD o
+          a = ZDD.fromSetOfIntSets xss
+       in counterexample (show a) $ ZDD.toSetOfIntSets a === xss
+
+prop_fromSetOfIntSets_toSetOfIntSets :: Property
+prop_fromSetOfIntSets_toSetOfIntSets =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      let xss = ZDD.toSetOfIntSets a
+       in counterexample (show xss) $ ZDD.fromSetOfIntSets xss === a
+
 prop_change :: Property
 prop_change =
   withDefaultOrder $ \(_ :: Proxy o) ->
