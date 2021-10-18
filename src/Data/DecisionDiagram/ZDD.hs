@@ -376,9 +376,9 @@ minimal (BDD.BDD node) = runST $ do
   ret <- f node
   return (ZDD ret)
 
--- | See 'minimalHittingSetsImai'.
+-- | See 'minimalHittingSetsToda'.
 minimalHittingSets :: forall a. ItemOrder a => ZDD a -> ZDD a
-minimalHittingSets = minimalHittingSetsImai
+minimalHittingSets = minimalHittingSetsToda
 
 -- | Is this the empty set?
 null :: ZDD a -> Bool
