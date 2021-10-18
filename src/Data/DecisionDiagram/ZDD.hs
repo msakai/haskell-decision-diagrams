@@ -286,8 +286,8 @@ nonSuperset (ZDD node1) (ZDD node2) = runST $ do
   ret <- f node1 node2
   return (ZDD ret)
 
-minimalHittingSets' :: forall a. ItemOrder a => Bool -> ZDD a -> ZDD a
-minimalHittingSets' imai (ZDD node) = runST $ do
+minimalHittingSetsKnuth' :: forall a. ItemOrder a => Bool -> ZDD a -> ZDD a
+minimalHittingSetsKnuth' imai (ZDD node) = runST $ do
   h <- C.newSized defaultTableSize
   let f F = return T
       f T = return F
@@ -312,7 +312,7 @@ minimalHittingSets' imai (ZDD node) = runST $ do
 -- Combinatorial Algorithms, Part 1," Addison-Wesley Professional,
 -- 2011.
 minimalHittingSetsKnuth :: forall a. ItemOrder a => ZDD a -> ZDD a
-minimalHittingSetsKnuth = minimalHittingSets' False
+minimalHittingSetsKnuth = minimalHittingSetsKnuth' False
 
 -- | Minimal hitting sets.
 --
@@ -320,7 +320,7 @@ minimalHittingSetsKnuth = minimalHittingSets' False
 -- computation with ZDDs," vol. 2015-AL-155, no. 15, Nov. 2015, pp. 1-3.
 -- [Online]. Available: <http://id.nii.ac.jp/1001/00145799/>.
 minimalHittingSetsImai :: forall a. ItemOrder a => ZDD a -> ZDD a
-minimalHittingSetsImai = minimalHittingSets' True
+minimalHittingSetsImai = minimalHittingSetsKnuth' True
 
 -- | Minimal hitting sets.
 --
