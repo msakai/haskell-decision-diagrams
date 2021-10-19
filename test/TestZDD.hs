@@ -378,6 +378,12 @@ prop_disjoint =
     forAll arbitrary $ \(a :: ZDD o, b) ->
       ZDD.disjoint a b === ZDD.null (a `ZDD.intersection` b)
 
+prop_flatten :: Property
+prop_flatten =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      ZDD.flatten a === IntSet.unions (ZDD.toListOfIntSets a)
+
 -- ------------------------------------------------------------------------
 
 zddTestGroup :: TestTree

@@ -68,6 +68,9 @@ module Data.DecisionDiagram.ZDD
   , minimalHittingSetsKnuth
   , minimalHittingSetsImai
 
+  -- * Misc
+  , flatten
+
   -- * Conversion
   , toListOfIntSets
   , toSetOfIntSets
@@ -430,6 +433,10 @@ isProperSubsetOf a b = a `isSubsetOf` b && a /= b
 -- | Check whether two sets are disjoint (i.e., their intersection is empty).
 disjoint :: ItemOrder a => ZDD a -> ZDD a -> Bool
 disjoint a b = null (a `intersection` b)
+
+--- | Unions of all member sets
+flatten :: ItemOrder a => ZDD a -> IntSet
+flatten = toMonoid IntSet.insert IntSet.empty
 
 -- | Create a ZDD from a set of 'IntSet'
 fromSetOfIntSets :: forall a. ItemOrder a => Set IntSet -> ZDD a
