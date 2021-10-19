@@ -10,6 +10,7 @@ import Data.List
 import Data.Proxy
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified GHC.Exts as Exts
 import Test.Tasty
 import Test.Tasty.QuickCheck
 import Test.Tasty.TH
@@ -279,6 +280,22 @@ prop_base :: Property
 prop_base =
   withDefaultOrder $ \(_ :: Proxy o) ->
     ZDD.toSetOfIntSets (ZDD.base :: ZDD o) === Set.singleton IntSet.empty
+
+prop_toList_fromList :: Property
+prop_toList_fromList =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \xss ->
+      let a :: ZDD o
+          a = Exts.fromList xss
+          f = Set.fromList . map IntSet.fromList
+       in counterexample (show a) $ f (Exts.toList a) === f xss
+
+prop_fromList_toList :: Property
+prop_fromList_toList =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      let xss = Exts.toList a
+       in counterexample (show xss) $ Exts.fromList xss === a
 
 prop_toSetOfIntSets_fromSetOfIntSets :: Property
 prop_toSetOfIntSets_fromSetOfIntSets =

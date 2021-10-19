@@ -2,6 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 ----------------------------------------------------------------------
 -- |
 -- Module      :  Data.DecisionDiagram.ZDD
@@ -80,10 +81,11 @@ import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
-import Data.List (sortBy)
+import Data.List (group, sortBy)
 import Data.Proxy
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified GHC.Exts as Exts
 import Numeric.Natural
 
 import Data.DecisionDiagram.BDD.Internal
@@ -99,6 +101,32 @@ defaultTableSize = 256
 -- | Zero-suppressed binary decision diagram representing family of sets
 newtype ZDD a = ZDD Node
   deriving (Eq, Hashable, Show)
+
+instance ItemOrder a => Exts.IsList (ZDD a) where
+  type Item (ZDD a) = [Int] -- Is it better to use IntSet?
+
+  fromList xss = unions
+    [ ZDD $ foldr (\x node -> Branch x F node) T
+          $ map head
+          $ group
+          $ sortBy (compareItem (Proxy :: Proxy a))
+          $ xs
+    | xs <- xss
+    ]
+
+  toList (ZDD node) = runST $ do
+    h <- C.newSized defaultTableSize
+    let f F = return []
+        f T = return [[]]
+        f p@(Branch top p0 p1) = do
+          m <- H.lookup h p
+          case m of
+            Just ret -> return ret
+            Nothing -> do
+              ret <- liftM2 (++) (f p0) (liftM (map (top:)) (f p1))
+              H.insert h p ret
+              return ret
+    f node
 
 zddNode :: Int -> Node -> Node -> Node
 zddNode _ p0 F = p0
