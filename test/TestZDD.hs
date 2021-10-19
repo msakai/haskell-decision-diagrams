@@ -336,6 +336,19 @@ prop_subset0 =
     forAll arbitrary $ \x ->
       ZDD.toSetOfIntSets (ZDD.subset0 x a) === Set.filter (IntSet.notMember x) (ZDD.toSetOfIntSets a)
 
+prop_member_1 :: Property
+prop_member_1 =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      conjoin [counterexample (show xs) (ZDD.member xs a) | xs <- ZDD.toListOfIntSets a]
+
+prop_member_2 :: Property
+prop_member_2 =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      forAll (liftM IntSet.fromList $ sublistOf (IntSet.toList (ZDD.flatten a))) $ \s2 ->
+        (s2 `ZDD.member` a) === (s2 `Set.member` ZDD.toSetOfIntSets a)
+
 prop_size :: Property
 prop_size =
   withDefaultOrder $ \(_ :: Proxy o) ->

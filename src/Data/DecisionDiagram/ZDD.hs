@@ -41,6 +41,8 @@ module Data.DecisionDiagram.ZDD
   , fromSetOfIntSets
 
   -- * Query
+  , member
+  , notMember
   , null
   , size
   , isSubsetOf
@@ -398,6 +400,28 @@ minimal (BDD.BDD node) = runST $ do
 -- | See 'minimalHittingSetsToda'.
 minimalHittingSets :: forall a. ItemOrder a => ZDD a -> ZDD a
 minimalHittingSets = minimalHittingSetsToda
+
+-- | Is the set a member of the family?
+member :: forall a. (ItemOrder a) => IntSet -> ZDD a -> Bool
+member xs zdd = member' xs' zdd
+  where
+    xs' = sortBy (compareItem (Proxy :: Proxy a)) $ IntSet.toList xs
+
+member' :: forall a. (ItemOrder a) => [Int] -> ZDD a -> Bool
+member' xs (ZDD node) = f xs node
+  where
+    f [] T = True
+    f [] (Branch _ p0 _) = f [] p0
+    f yys@(y:ys) (Branch top p0 p1) =
+      case compareItem (Proxy :: Proxy a) y top of
+        EQ -> f ys p1
+        GT -> f yys p0
+        LT -> False
+    f _ _ = False
+
+-- | Is the set not in the family?
+notMember :: forall a. (ItemOrder a) => IntSet -> ZDD a -> Bool
+notMember xs zdd = not (member xs zdd)
 
 -- | Is this the empty set?
 null :: ZDD a -> Bool
