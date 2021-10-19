@@ -107,28 +107,12 @@ newtype ZDD a = ZDD Node
 instance ItemOrder a => Exts.IsList (ZDD a) where
   type Item (ZDD a) = [Int] -- Is it better to use IntSet?
 
-  fromList xss = unions
-    [ ZDD $ foldr (\x node -> Branch x F node) T
-          $ map head
-          $ group
-          $ sortBy (compareItem (Proxy :: Proxy a))
-          $ xs
-    | xs <- xss
-    ]
+  fromList = fromListOfSortedList . map f
+    where
+      f :: [Int] -> [Int]
+      f = map head . group . sortBy (compareItem (Proxy :: Proxy a))
 
-  toList (ZDD node) = runST $ do
-    h <- C.newSized defaultTableSize
-    let f F = return []
-        f T = return [[]]
-        f p@(Branch top p0 p1) = do
-          m <- H.lookup h p
-          case m of
-            Just ret -> return ret
-            Nothing -> do
-              ret <- liftM2 (++) (f p0) (liftM (map (top:)) (f p1))
-              H.insert h p ret
-              return ret
-    f node
+  toList = toMonoid (\i -> map (i :)) [[]]
 
 zddNode :: Int -> Node -> Node -> Node
 zddNode _ p0 F = p0
@@ -457,16 +441,20 @@ toSetOfIntSets = toMonoid (\i -> Set.map (IntSet.insert i)) (Set.singleton IntSe
 
 -- | Create a ZDD from a list of 'IntSet'
 fromListOfIntSets :: forall a. ItemOrder a => [IntSet] -> ZDD a
-fromListOfIntSets xss = unions
-  [ ZDD $ foldr (\x node -> Branch x F node) T
-        $ sortBy (compareItem (Proxy :: Proxy a))
-        $ IntSet.toList xs
-  | xs <- xss
-  ]    
+fromListOfIntSets = fromListOfSortedList . map f
+  where
+    f :: IntSet -> [Int]
+    f = sortBy (compareItem (Proxy :: Proxy a)) . IntSet.toList
 
 -- | Convert the family to a list of 'IntSet'.
 toListOfIntSets :: ZDD a -> [IntSet]
 toListOfIntSets = toMonoid (\i -> map (IntSet.insert i)) [IntSet.empty]
+
+fromListOfSortedList :: forall a. ItemOrder a => [[Int]] -> ZDD a
+fromListOfSortedList = unions . map f
+  where
+    f :: [Int] -> ZDD a
+    f = ZDD . foldr (\x node -> Branch x F node) T
 
 toMonoid :: Monoid m => (Int -> m -> m) -> m -> ZDD a -> m
 toMonoid ins b (ZDD node) = runST $ do
