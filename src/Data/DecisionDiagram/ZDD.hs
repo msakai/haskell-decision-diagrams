@@ -37,6 +37,7 @@ module Data.DecisionDiagram.ZDD
   -- * Construction
   , empty
   , base
+  , fromListOfIntSets
   , fromSetOfIntSets
 
   -- * Query
@@ -68,6 +69,7 @@ module Data.DecisionDiagram.ZDD
   , minimalHittingSetsImai
 
   -- * Conversion
+  , toListOfIntSets
   , toSetOfIntSets
   ) where
 
@@ -447,25 +449,36 @@ disjoint a b = null (a `intersection` b)
 
 -- | Create a ZDD from a set of 'IntSet'
 fromSetOfIntSets :: forall a. ItemOrder a => Set IntSet -> ZDD a
-fromSetOfIntSets xss = unions
-  [ ZDD $ foldr (\x node -> Branch x F node) T
-        $ sortBy (compareItem (Proxy :: Proxy a))
-        $ IntSet.toList xs
-  | xs <- Set.toList xss
-  ]    
+fromSetOfIntSets = fromListOfIntSets . Set.toList
 
 -- | Convert the family to a set of 'IntSet'.
 toSetOfIntSets :: ZDD a -> Set IntSet
-toSetOfIntSets (ZDD node) = runST $ do
+toSetOfIntSets = toMonoid (\i -> Set.map (IntSet.insert i)) (Set.singleton IntSet.empty)
+
+-- | Create a ZDD from a list of 'IntSet'
+fromListOfIntSets :: forall a. ItemOrder a => [IntSet] -> ZDD a
+fromListOfIntSets xss = unions
+  [ ZDD $ foldr (\x node -> Branch x F node) T
+        $ sortBy (compareItem (Proxy :: Proxy a))
+        $ IntSet.toList xs
+  | xs <- xss
+  ]    
+
+-- | Convert the family to a list of 'IntSet'.
+toListOfIntSets :: ZDD a -> [IntSet]
+toListOfIntSets = toMonoid (\i -> map (IntSet.insert i)) [IntSet.empty]
+
+toMonoid :: Monoid m => (Int -> m -> m) -> m -> ZDD a -> m
+toMonoid ins b (ZDD node) = runST $ do
   h <- C.newSized defaultTableSize
-  let f F = return Set.empty
-      f T = return (Set.singleton IntSet.empty)
+  let f F = return mempty
+      f T = return b
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
           Just ret -> return ret
           Nothing -> do
-            ret <- liftM2 Set.union (f p0) (liftM (Set.map (IntSet.insert top)) (f p1))
+            ret <- liftM2 (<>) (f p0) (liftM (ins top) (f p1))
             H.insert h p ret
             return ret
   f node
