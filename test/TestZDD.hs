@@ -287,7 +287,7 @@ prop_toList_fromList =
     forAll arbitrary $ \xss ->
       let a :: ZDD o
           a = Exts.fromList xss
-          f = Set.fromList . map IntSet.fromList
+          f = Set.fromList
        in counterexample (show a) $ f (Exts.toList a) === f xss
 
 prop_fromList_toList :: Property

@@ -91,7 +91,7 @@ import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
-import Data.List (group, sortBy)
+import Data.List (sortBy)
 import Data.Proxy
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -113,14 +113,14 @@ newtype ZDD a = ZDD Node
   deriving (Eq, Hashable, Show)
 
 instance ItemOrder a => Exts.IsList (ZDD a) where
-  type Item (ZDD a) = [Int] -- Is it better to use IntSet?
+  type Item (ZDD a) = IntSet
 
   fromList = fromListOfSortedList . map f
     where
-      f :: [Int] -> [Int]
-      f = map head . group . sortBy (compareItem (Proxy :: Proxy a))
+      f :: IntSet -> [Int]
+      f = sortBy (compareItem (Proxy :: Proxy a)) . IntSet.toList
 
-  toList = fold' [] [[]] (\top lo hi -> lo <> map (top :) hi)
+  toList = fold' [] [IntSet.empty] (\top lo hi -> lo <> map (IntSet.insert top) hi)
 
 zddNode :: Int -> Node -> Node -> Node
 zddNode _ p0 F = p0
