@@ -120,7 +120,7 @@ instance ItemOrder a => Exts.IsList (ZDD a) where
       f :: [Int] -> [Int]
       f = map head . group . sortBy (compareItem (Proxy :: Proxy a))
 
-  toList = toMonoid (\i -> map (i :)) [[]]
+  toList = fold' [] [[]] (\top lo hi -> lo <> map (top :) hi)
 
 zddNode :: Int -> Node -> Node -> Node
 zddNode _ p0 F = p0
@@ -358,28 +358,13 @@ minimalHittingSetsToda :: forall a. ItemOrder a => ZDD a -> ZDD a
 minimalHittingSetsToda = minimal . hittingSetsBDD
 
 hittingSetsBDD :: forall a. ItemOrder a => ZDD a -> BDD.BDD a
-hittingSetsBDD(ZDD node) = runST $ do
-  h <- C.newSized defaultTableSize
-  let f F = return BDD.true
-      f T = return BDD.false
-      f p@(Branch top p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            BDD.BDD h0 <- f p0
-            BDD.BDD h1 <- f p1
-            let ret = BDD.BDD h0 BDD..&&. BDD.BDD (bddNode top h1 T)
-            H.insert h p ret
-            return ret
-  ret <- f node
-  return ret
+hittingSetsBDD = fold' BDD.true BDD.false (\top h0 h1 -> h0 BDD..&&. bddNode top h1 BDD.true)
   where
     -- XXX
-    bddNode :: Int -> Node -> Node -> Node
-    bddNode ind lo hi
-      | lo == hi = lo
-      | otherwise = Branch ind lo hi
+    bddNode :: Int -> BDD.BDD a -> BDD.BDD a -> BDD.BDD a
+    bddNode ind (BDD.BDD lo) (BDD.BDD hi)
+      | lo == hi = BDD.BDD lo
+      | otherwise = BDD.BDD (Branch ind lo hi)
 
 minimal :: forall a. ItemOrder a => BDD.BDD a -> ZDD a
 minimal (BDD.BDD node) = runST $ do
@@ -435,19 +420,7 @@ null = (empty ==)
 {-# SPECIALIZE size :: ZDD a -> Natural #-}
 -- | The number of sets in the family.
 size :: (Integral b) => ZDD a -> b
-size (ZDD node) = runST $ do
-  h <- C.newSized defaultTableSize
-  let f F = return 0
-      f T = return 1
-      f p@(Branch _ p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            ret <- liftM2 (+) (f p0) (f p1)
-            H.insert h p ret
-            return ret
-  f node
+size = fold' 0 1 (\_ n0 n1 -> n0 + n1)
 
 -- | Is this the empty set?
 isSubsetOf :: ItemOrder a => ZDD a -> ZDD a -> Bool
@@ -463,7 +436,7 @@ disjoint a b = null (a `intersection` b)
 
 --- | Unions of all member sets
 flatten :: ItemOrder a => ZDD a -> IntSet
-flatten = toMonoid IntSet.insert IntSet.empty
+flatten = fold' IntSet.empty IntSet.empty (\top lo hi -> IntSet.insert top (lo `IntSet.union` hi))
 
 -- | Create a ZDD from a set of 'IntSet'
 fromSetOfIntSets :: forall a. ItemOrder a => Set IntSet -> ZDD a
@@ -471,7 +444,7 @@ fromSetOfIntSets = fromListOfIntSets . Set.toList
 
 -- | Convert the family to a set of 'IntSet'.
 toSetOfIntSets :: ZDD a -> Set IntSet
-toSetOfIntSets = toMonoid (\i -> Set.map (IntSet.insert i)) (Set.singleton IntSet.empty)
+toSetOfIntSets = fold' Set.empty (Set.singleton IntSet.empty) (\top lo hi -> lo <> Set.map (IntSet.insert top) hi)
 
 -- | Create a ZDD from a list of 'IntSet'
 fromListOfIntSets :: forall a. ItemOrder a => [IntSet] -> ZDD a
@@ -482,7 +455,7 @@ fromListOfIntSets = fromListOfSortedList . map f
 
 -- | Convert the family to a list of 'IntSet'.
 toListOfIntSets :: ZDD a -> [IntSet]
-toListOfIntSets = toMonoid (\i -> map (IntSet.insert i)) [IntSet.empty]
+toListOfIntSets = fold [] [IntSet.empty] (\top lo hi -> lo <> map (IntSet.insert top) hi)
 
 fromListOfSortedList :: forall a. ItemOrder a => [[Int]] -> ZDD a
 fromListOfSortedList = unions . map f
@@ -521,21 +494,6 @@ fold' !ff !tt br (ZDD node) = runST $ do
             r1 <- f p1
             let ret = br top r0 r1
             seq ret $ H.insert h p ret
-            return ret
-  f node
-
-toMonoid :: Monoid m => (Int -> m -> m) -> m -> ZDD a -> m
-toMonoid ins b (ZDD node) = runST $ do
-  h <- C.newSized defaultTableSize
-  let f F = return mempty
-      f T = return b
-      f p@(Branch top p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            ret <- liftM2 (<>) (f p0) (liftM (ins top) (f p1))
-            H.insert h p ret
             return ret
   f node
 
