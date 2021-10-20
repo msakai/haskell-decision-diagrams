@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -73,6 +74,7 @@ module Data.DecisionDiagram.ZDD
   -- * Misc
   , flatten
   , fold
+  , fold'
 
   -- * Conversion
   , toListOfIntSets
@@ -502,6 +504,23 @@ fold ff tt br (ZDD node) = runST $ do
             r1 <- f p1
             let ret = br top r0 r1
             H.insert h p ret
+            return ret
+  f node
+
+fold' :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
+fold' !ff !tt br (ZDD node) = runST $ do
+  h <- C.newSized defaultTableSize
+  let f F = return ff
+      f T = return tt
+      f p@(Branch top p0 p1) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            r0 <- f p0
+            r1 <- f p1
+            let ret = br top r0 r1
+            seq ret $ H.insert h p ret
             return ret
   f node
 
