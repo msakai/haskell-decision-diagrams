@@ -72,6 +72,7 @@ module Data.DecisionDiagram.ZDD
 
   -- * Misc
   , flatten
+  , fold
 
   -- * Conversion
   , toListOfIntSets
@@ -486,6 +487,23 @@ fromListOfSortedList = unions . map f
   where
     f :: [Int] -> ZDD a
     f = ZDD . foldr (\x node -> Branch x F node) T
+
+fold :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
+fold ff tt br (ZDD node) = runST $ do
+  h <- C.newSized defaultTableSize
+  let f F = return ff
+      f T = return tt
+      f p@(Branch top p0 p1) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            r0 <- f p0
+            r1 <- f p1
+            let ret = br top r0 r1
+            H.insert h p ret
+            return ret
+  f node
 
 toMonoid :: Monoid m => (Int -> m -> m) -> m -> ZDD a -> m
 toMonoid ins b (ZDD node) = runST $ do
