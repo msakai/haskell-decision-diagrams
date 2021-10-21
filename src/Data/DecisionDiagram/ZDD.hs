@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -71,6 +72,9 @@ module Data.DecisionDiagram.ZDD
   , minimalHittingSetsKnuth
   , minimalHittingSetsImai
 
+  -- * Random sampling
+  , uniformM
+
   -- * Misc
   , flatten
   , fold
@@ -84,19 +88,31 @@ module Data.DecisionDiagram.ZDD
 import Prelude hiding (null)
 
 import Control.Monad
+#if !MIN_VERSION_mwc_random(0,15,0)
+import Control.Monad.Primitive
+#endif
 import Control.Monad.ST
 import qualified Data.Foldable as Foldable
 import Data.Hashable
+import Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List (sortBy)
 import Data.Proxy
+import Data.Ratio
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified GHC.Exts as Exts
 import Numeric.Natural
+#if MIN_VERSION_mwc_random(0,15,0)
+import System.Random.Stateful (StatefulGen (..))
+#else
+import System.Random.MWC (Gen)
+#endif
+import System.Random.MWC.Distributions (bernoulli)
 
 import Data.DecisionDiagram.BDD.Internal
 import qualified Data.DecisionDiagram.BDD as BDD
@@ -496,5 +512,66 @@ fold' !ff !tt br (ZDD node) = runST $ do
             seq ret $ H.insert h p ret
             return ret
   f node
+
+-- ------------------------------------------------------------------------
+
+-- | Sample a set from uniform distribution over elements of the ZDD.
+--
+-- The function constructs a table internally and the table is shared across
+-- multiple use of the resulting action (@m IntSet@).
+-- Therefore, the code
+--
+-- @
+-- let g = uniformM zdd gen
+-- s1 <- g
+-- s2 <- g
+-- @
+--
+-- is more efficient than
+--
+-- @
+-- s1 <- uniformM zdd gen
+-- s2 <- uniformM zdd gen
+-- @
+-- .
+#if MIN_VERSION_mwc_random(0,15,0)
+uniformM :: forall a g m. (ItemOrder a, StatefulGen g m) => ZDD a -> g -> m IntSet
+#else
+uniformM :: forall a m. (ItemOrder a, PrimMonad m) => ZDD a -> Gen (PrimState m) -> m IntSet
+#endif
+uniformM (ZDD F) = error "Data.DecisionDiagram.ZDD.uniformM: empty ZDD"
+uniformM (ZDD node) = func
+  where
+    func gen = f node []
+      where
+        f F _ = error "Data.DecisionDiagram.ZDD.uniformM: should not happen"
+        f T r = return $ IntSet.fromList r
+        f p@(Branch top p0 p1) r = do
+          b <- bernoulli (table HashMap.! p) gen
+          if b then
+            f p1 (top : r)
+          else
+            f p0 r
+
+    table :: HashMap Node Double
+    table = runST $ do
+      h <- C.newSized defaultTableSize
+      let f F = return (0 :: Integer)
+          f T = return 1
+          f p@(Branch _ p0 p1) = do
+            m <- H.lookup h p
+            case m of
+              Just (ret, _) -> return ret
+              Nothing -> do
+                n0 <- f p0
+                n1 <- f p1
+                let s = n0 + n1
+                    r :: Double
+                    r = realToFrac (n1 % (n0 + n1))
+                seq r $ H.insert h p (s, r)
+                return s
+      _ <- f node
+      xs <- H.toList h
+      return $ HashMap.fromList [(n, r) | (n, (_, r)) <- xs]
 
 -- ------------------------------------------------------------------------

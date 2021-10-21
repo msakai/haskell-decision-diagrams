@@ -25,6 +25,9 @@ dependencies:
 - hashable
 - hashtables
 - intern >=0.9.1.2 && <1.0.0.0
+- mwc-random
+- primitive
+- random
 - reflection
 - unordered-containers
 
@@ -41,6 +44,8 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - decision-diagrams
+    - QuickCheck
+    - statistics
     - tasty >=0.10.1
     - tasty-hunit >=0.9 && <0.11
     - tasty-quickcheck >=0.8 && <0.11

@@ -7,10 +7,15 @@ import Control.Monad
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List
+import qualified Data.Map.Strict as Map
 import Data.Proxy
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified GHC.Exts as Exts
+import Statistics.Distribution
+import Statistics.Distribution.ChiSquared (chiSquared)
+import qualified System.Random.MWC as Rand
+import qualified Test.QuickCheck.Monadic as QM
 import Test.Tasty
 import Test.Tasty.QuickCheck
 import Test.Tasty.TH
@@ -396,6 +401,25 @@ prop_flatten =
   withDefaultOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(a :: ZDD o) ->
       ZDD.flatten a === IntSet.unions (ZDD.toListOfIntSets a)
+
+prop_uniformM :: Property
+prop_uniformM =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll (arbitrary `suchThat` ((>= (2::Integer)) . ZDD.size)) $ \(a :: ZDD o) ->
+      QM.monadicIO $ do
+        gen <- QM.run Rand.create
+        let m :: Integer
+            m = ZDD.size a
+            n = 1000
+        samples <- QM.run $ replicateM n $ ZDD.uniformM a gen
+        let hist_actual = Map.fromListWith (+) [(s, 1) | s <- samples]
+            hist_expected = [(s, fromIntegral n / fromIntegral m) | s <- ZDD.toListOfIntSets a]
+            chi_sq = sum [(Map.findWithDefault 0 s hist_actual - cnt) ** 2 / cnt | (s, cnt) <- hist_expected]
+            threshold = complQuantile (chiSquared (fromIntegral m - 1)) 0.001
+        QM.monitor $ counterexample $ show hist_actual ++ " /= " ++ show (Map.fromList hist_expected)
+        QM.assert $ and [xs `ZDD.member` a | xs <- Map.keys hist_actual]
+        QM.monitor $ counterexample $ "χ² = " ++ show chi_sq ++ " >= " ++ show threshold
+        QM.assert $ chi_sq < threshold
 
 -- ------------------------------------------------------------------------
 
