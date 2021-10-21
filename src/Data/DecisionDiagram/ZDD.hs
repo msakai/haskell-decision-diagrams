@@ -39,6 +39,7 @@ module Data.DecisionDiagram.ZDD
   -- * Construction
   , empty
   , base
+  , singleton
   , fromListOfIntSets
   , fromSetOfIntSets
 
@@ -172,6 +173,10 @@ empty = ZDD F
 -- | The set containing only the empty set ({∅}).
 base :: ZDD a
 base = ZDD T
+
+-- | Create a ZDD that contains only a given set.
+singleton :: forall a. ItemOrder a => IntSet -> ZDD a
+singleton xs = insert xs empty
 
 -- | Select subsets that contain a particular element and then remove the element from them
 subset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a

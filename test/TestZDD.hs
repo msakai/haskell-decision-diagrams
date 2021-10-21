@@ -286,6 +286,14 @@ prop_base =
   withDefaultOrder $ \(_ :: Proxy o) ->
     ZDD.toSetOfIntSets (ZDD.base :: ZDD o) === Set.singleton IntSet.empty
 
+prop_singleton :: Property
+prop_singleton =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll (liftM IntSet.fromList arbitrary) $ \xs ->
+      let a :: ZDD o
+          a = ZDD.singleton xs
+       in counterexample (show a) $ ZDD.toSetOfIntSets a === Set.singleton xs
+
 prop_toList_fromList :: Property
 prop_toList_fromList =
   withDefaultOrder $ \(_ :: Proxy o) ->
