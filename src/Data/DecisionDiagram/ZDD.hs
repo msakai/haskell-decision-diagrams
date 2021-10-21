@@ -474,7 +474,7 @@ null = (empty ==)
 size :: (Integral b) => ZDD a -> b
 size = fold' 0 1 (\_ n0 n1 -> n0 + n1)
 
--- | Is this the empty set?
+-- | @(s1 `isSubsetOf` s2)@ indicates whether @s1@ is a subset of @s2@.
 isSubsetOf :: ItemOrder a => ZDD a -> ZDD a -> Bool
 isSubsetOf a b = union a b == b
 
