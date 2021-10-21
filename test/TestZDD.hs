@@ -317,6 +317,36 @@ prop_fromSetOfIntSets_toSetOfIntSets =
       let xss = ZDD.toSetOfIntSets a
        in counterexample (show xss) $ ZDD.fromSetOfIntSets xss === a
 
+prop_insert :: Property
+prop_insert =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      forAll (liftM IntSet.fromList arbitrary) $ \xs ->
+        ZDD.toSetOfIntSets (ZDD.insert xs a) === Set.insert xs (ZDD.toSetOfIntSets a)
+
+prop_insert_idempotent :: Property
+prop_insert_idempotent =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      forAll (liftM IntSet.fromList arbitrary) $ \xs ->
+        let b = ZDD.insert xs a
+         in counterexample (show b) $ ZDD.insert xs b === b
+
+prop_delete :: Property
+prop_delete =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      forAll (liftM IntSet.fromList $ sublistOf (IntSet.toList (ZDD.flatten a))) $ \xs ->
+        ZDD.toSetOfIntSets (ZDD.delete xs a) === Set.delete xs (ZDD.toSetOfIntSets a)
+
+prop_delete_idempotent :: Property
+prop_delete_idempotent =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      forAll (liftM IntSet.fromList $ sublistOf (IntSet.toList (ZDD.flatten a))) $ \xs ->
+        let b = ZDD.delete xs a
+         in counterexample (show b) $ ZDD.delete xs b === b
+
 prop_change :: Property
 prop_change =
   withDefaultOrder $ \(_ :: Proxy o) ->

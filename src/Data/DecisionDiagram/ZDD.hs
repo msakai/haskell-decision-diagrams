@@ -42,6 +42,12 @@ module Data.DecisionDiagram.ZDD
   , fromListOfIntSets
   , fromSetOfIntSets
 
+  -- * Insertion
+  , insert
+
+  -- * Deletion
+  , delete
+
   -- * Query
   , member
   , notMember
@@ -204,6 +210,36 @@ subset0 var (ZDD node) = runST $ do
             return ret
   ret <- f node
   return (ZDD ret)
+
+-- | Insert a set into the ZDD.
+insert :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
+insert xs (ZDD node) = ZDD $ f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs)) node
+  where
+    f [] F = T
+    f [] T = T
+    f [] (Branch top p0 p1) = zddNode top (f [] p0) p1
+    f (y : ys) F = zddNode y F (f ys F)
+    f (y : ys) T = zddNode y T (f ys F)
+    f yys@(y : ys) p@(Branch top p0 p1) =
+      case compareItem (Proxy :: Proxy a) y top of
+        LT -> zddNode y p (f ys F)
+        GT -> zddNode top (f yys p0) p1
+        EQ -> zddNode top p0 (f ys p1)
+
+-- | Delete a set from the ZDD.
+delete :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
+delete xs (ZDD node) = ZDD $ f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs)) node
+  where
+    f [] F = F
+    f [] T = F
+    f [] (Branch top p0 p1) = zddNode top (f [] p0) p1
+    f (_ : _) F = F
+    f (_ : _) T = T
+    f yys@(y : ys) p@(Branch top p0 p1) =
+      case compareItem (Proxy :: Proxy a) y top of
+        LT -> p
+        GT -> zddNode top (f yys p0) p1
+        EQ -> zddNode top p0 (f ys p1)
 
 -- | @change x p@ returns {if x∈s then s∖{x} else s∪{x} | s∈P}
 change :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
