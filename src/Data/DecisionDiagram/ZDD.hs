@@ -75,6 +75,10 @@ module Data.DecisionDiagram.ZDD
   , mapDelete
   , change
 
+  -- * Fold
+  , fold
+  , fold'
+
   -- * Minimal hitting sets
   , minimalHittingSets
   , minimalHittingSetsToda
@@ -86,8 +90,6 @@ module Data.DecisionDiagram.ZDD
 
   -- * Misc
   , flatten
-  , fold
-  , fold'
 
   -- * Conversion
   , toListOfIntSets
@@ -566,6 +568,10 @@ fromListOfSortedList = unions . map f
     f :: [Int] -> ZDD a
     f = ZDD . foldr (\x node -> Branch x F node) T
 
+-- | Fold over the graph structure of the ZDD.
+--
+-- It takes values for substituting 'empty' and 'base',
+-- and a function for substiting non-terminal node.
 fold :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
 fold ff tt br (ZDD node) = runST $ do
   h <- C.newSized defaultTableSize
@@ -583,6 +589,7 @@ fold ff tt br (ZDD node) = runST $ do
             return ret
   f node
 
+-- | Strict version of 'fold'
 fold' :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
 fold' !ff !tt br (ZDD node) = runST $ do
   h <- C.newSized defaultTableSize
