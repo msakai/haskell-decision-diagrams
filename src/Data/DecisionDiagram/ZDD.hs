@@ -69,7 +69,9 @@ module Data.DecisionDiagram.ZDD
   , subset1
   , subset0
 
-  -- * Update
+  -- * Map
+  , mapInsert
+  , mapDelete
   , change
 
   -- * Minimal hitting sets
@@ -240,6 +242,50 @@ delete xs (ZDD node) = ZDD $ f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.
         LT -> p
         GT -> zddNode top (f yys p0) p1
         EQ -> zddNode top p0 (f ys p1)
+
+-- | Insert an item into each element set of ZDD.
+mapInsert :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
+mapInsert var (ZDD node) = runST $ do
+  h <- C.newSized defaultTableSize
+  let f p@T = return (zddNode var F p)
+      f F = return F
+      f p@(Branch top p0 p1) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            ret <- case compareItem (Proxy :: Proxy a) top var of
+              GT -> return (zddNode var F p)
+              LT -> liftM2 (zddNode top) (f p0) (f p1)
+              EQ ->
+                let ZDD r :: ZDD a = ZDD p0 `union` ZDD p1
+                 in return (zddNode top F r)
+            H.insert h p ret
+            return ret
+  ret <- f node
+  return (ZDD ret)
+
+-- | Delete an item from each element set of ZDD.
+mapDelete :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
+mapDelete var (ZDD node) = runST $ do
+  h <- C.newSized defaultTableSize
+  let f T = return T
+      f F = return F
+      f p@(Branch top p0 p1) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            ret <- case compareItem (Proxy :: Proxy a) top var of
+              GT -> return p
+              LT -> liftM2 (zddNode top) (f p0) (f p1)
+              EQ ->
+                let ZDD r :: ZDD a = ZDD p0 `union` ZDD p1
+                 in return r
+            H.insert h p ret
+            return ret
+  ret <- f node
+  return (ZDD ret)
 
 -- | @change x p@ returns {if x∈s then s∖{x} else s∪{x} | s∈P}
 change :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a

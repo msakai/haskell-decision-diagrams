@@ -347,6 +347,36 @@ prop_delete_idempotent =
         let b = ZDD.delete xs a
          in counterexample (show b) $ ZDD.delete xs b === b
 
+prop_mapInsert :: Property
+prop_mapInsert =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      forAll arbitrary $ \x ->
+        ZDD.toSetOfIntSets (ZDD.mapInsert x a) === Set.map (IntSet.insert x) (ZDD.toSetOfIntSets a)
+
+prop_mapInsert_idempotent :: Property
+prop_mapInsert_idempotent =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      forAll arbitrary $ \x ->
+        let b = ZDD.mapInsert x a
+         in counterexample (show b) $ ZDD.mapInsert x b === b
+
+prop_mapDelete :: Property
+prop_mapDelete =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      forAll arbitrary $ \x ->
+        ZDD.toSetOfIntSets (ZDD.mapDelete x a) === Set.map (IntSet.delete x) (ZDD.toSetOfIntSets a)
+
+prop_mapDelete_idempotent :: Property
+prop_mapDelete_idempotent =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      forAll arbitrary $ \x ->
+        let b = ZDD.mapDelete x a
+         in counterexample (show b) $ ZDD.mapDelete x b === b
+
 prop_change :: Property
 prop_change =
   withDefaultOrder $ \(_ :: Proxy o) ->
