@@ -39,6 +39,9 @@ library
     , hashable
     , hashtables
     , intern >=0.9.1.2 && <1.0.0.0
+    , mwc-random
+    , primitive
+    , random
     , reflection
     , unordered-containers
   default-language: Haskell2010
@@ -54,13 +57,18 @@ test-suite decision-diagrams-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      QuickCheck
+    , base >=4.7 && <5
     , containers
     , decision-diagrams
     , hashable
     , hashtables
     , intern >=0.9.1.2 && <1.0.0.0
+    , mwc-random
+    , primitive
+    , random
     , reflection
+    , statistics
     , tasty >=0.10.1
     , tasty-hunit >=0.9 && <0.11
     , tasty-quickcheck >=0.8 && <0.11
