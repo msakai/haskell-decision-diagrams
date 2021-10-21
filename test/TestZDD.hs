@@ -387,6 +387,13 @@ prop_change =
             | otherwise = IntSet.insert x xs
        in ZDD.toSetOfIntSets (ZDD.change x a) === Set.map f (ZDD.toSetOfIntSets a)
 
+prop_change_involution :: Property
+prop_change_involution =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      forAll arbitrary $ \x ->
+        ZDD.change x (ZDD.change x a) === a
+
 prop_subset1 :: Property
 prop_subset1 =
   withDefaultOrder $ \(_ :: Proxy o) ->
