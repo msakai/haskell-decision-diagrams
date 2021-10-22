@@ -30,7 +30,7 @@
 module Data.DecisionDiagram.ZDD
   (
   -- * ZDD type
-    ZDD (ZDD, F, T, Branch)
+    ZDD (ZDD, Empty, Base, Branch)
 
   -- * Item ordering
   , ItemOrder (..)
@@ -142,17 +142,17 @@ defaultTableSize = 256
 newtype ZDD a = ZDD Node.Node
   deriving (Eq, Hashable, Show)
 
-pattern F :: ZDD a
-pattern F = ZDD Node.F
+pattern Empty :: ZDD a
+pattern Empty = ZDD Node.F
 
-pattern T :: ZDD a
-pattern T = ZDD Node.T
+pattern Base :: ZDD a
+pattern Base = ZDD Node.T
 
 pattern Branch :: Int -> ZDD a -> ZDD a -> ZDD a
 pattern Branch x lo hi <- ZDD (Node.Branch x (ZDD -> lo) (ZDD -> hi)) where
   Branch x (ZDD lo) (ZDD hi) = ZDD (Node.Branch x lo hi)
 
-{-# COMPLETE T, F, Branch #-}
+{-# COMPLETE Empty, Base, Branch #-}
 
 nodeId :: ZDD a -> Int
 nodeId (ZDD node) = Node.nodeId node
@@ -168,7 +168,7 @@ instance ItemOrder a => Exts.IsList (ZDD a) where
   toList = fold' [] [IntSet.empty] (\top lo hi -> lo <> map (IntSet.insert top) hi)
 
 zddNode :: Int -> ZDD a -> ZDD a -> ZDD a
-zddNode _ p0 F = p0
+zddNode _ p0 Empty = p0
 zddNode top p0 p1 = Branch top p0 p1
 
 data ZDDCase2 a
@@ -188,11 +188,11 @@ zddCase2 _ _ _ = error "should not happen"
 
 -- | The empty set (∅).
 empty :: ZDD a
-empty = F
+empty = Empty
 
 -- | The set containing only the empty set ({∅}).
 base :: ZDD a
-base = T
+base = Base
 
 -- | Create a ZDD that contains only a given set.
 singleton :: forall a. ItemOrder a => IntSet -> ZDD a
@@ -202,15 +202,15 @@ singleton xs = insert xs empty
 subset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 subset1 var zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f T = return F
-      f F = return F
+  let f Base = return Empty
+      f Empty = return Empty
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
           Just ret -> return ret
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) top var of
-              GT -> return F
+              GT -> return Empty
               EQ -> return p1
               LT -> liftM2 (zddNode top) (f p0) (f p1)
             H.insert h p ret
@@ -221,8 +221,8 @@ subset1 var zdd = runST $ do
 subset0 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 subset0 var zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f p@T = return p
-      f F = return F
+  let f p@Base = return p
+      f Empty = return Empty
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
@@ -240,14 +240,14 @@ subset0 var zdd = runST $ do
 insert :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
 insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
-    f [] F = T
-    f [] T = T
+    f [] Empty = Base
+    f [] Base = Base
     f [] (Branch top p0 p1) = zddNode top (f [] p0) p1
-    f (y : ys) F = zddNode y F (f ys F)
-    f (y : ys) T = zddNode y T (f ys F)
+    f (y : ys) Empty = zddNode y Empty (f ys Empty)
+    f (y : ys) Base = zddNode y Base (f ys Empty)
     f yys@(y : ys) p@(Branch top p0 p1) =
       case compareItem (Proxy :: Proxy a) y top of
-        LT -> zddNode y p (f ys F)
+        LT -> zddNode y p (f ys Empty)
         GT -> zddNode top (f yys p0) p1
         EQ -> zddNode top p0 (f ys p1)
 
@@ -255,11 +255,11 @@ insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
 delete :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
 delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
-    f [] F = F
-    f [] T = F
+    f [] Empty = Empty
+    f [] Base = Empty
     f [] (Branch top p0 p1) = zddNode top (f [] p0) p1
-    f (_ : _) F = F
-    f (_ : _) T = T
+    f (_ : _) Empty = Empty
+    f (_ : _) Base = Base
     f yys@(y : ys) p@(Branch top p0 p1) =
       case compareItem (Proxy :: Proxy a) y top of
         LT -> p
@@ -270,17 +270,17 @@ delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
 mapInsert :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 mapInsert var zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f p@T = return (zddNode var F p)
-      f F = return F
+  let f p@Base = return (zddNode var Empty p)
+      f Empty = return Empty
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
           Just ret -> return ret
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) top var of
-              GT -> return (zddNode var F p)
+              GT -> return (zddNode var Empty p)
               LT -> liftM2 (zddNode top) (f p0) (f p1)
-              EQ -> return (zddNode top F (p0 `union` p1))
+              EQ -> return (zddNode top Empty (p0 `union` p1))
             H.insert h p ret
             return ret
   f zdd
@@ -289,8 +289,8 @@ mapInsert var zdd = runST $ do
 mapDelete :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 mapDelete var zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f T = return T
-      f F = return F
+  let f Base = return Base
+      f Empty = return Empty
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
@@ -308,15 +308,15 @@ mapDelete var zdd = runST $ do
 change :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 change var zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f p@T = return (zddNode var F p)
-      f F = return F
+  let f p@Base = return (zddNode var Empty p)
+      f Empty = return Empty
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
           Just ret -> return ret
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) top var of
-              GT -> return (zddNode var F p)
+              GT -> return (zddNode var Empty p)
               EQ -> return (zddNode var p1 p0)
               LT -> liftM2 (zddNode top) (f p0) (f p1)
             H.insert h p ret
@@ -327,8 +327,8 @@ change var zdd = runST $ do
 union :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 union zdd1 zdd2 = runST $ do
   h <- C.newSized defaultTableSize
-  let f F q = return q
-      f p F = return p
+  let f Empty q = return q
+      f p Empty = return p
       f p q | p == q = return p
       f p q = do
         let key = if nodeId p <= nodeId q then (p, q) else (q, p)
@@ -352,8 +352,8 @@ unions xs = Foldable.foldl' union empty xs
 intersection :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 intersection zdd1 zdd2 = runST $ do
   h <- C.newSized defaultTableSize
-  let f F _q = return F
-      f _p F = return F
+  let f Empty _q = return Empty
+      f _p Empty = return Empty
       f p q | p == q = return p
       f p q = do
         let key = if nodeId p <= nodeId q then (p, q) else (q, p)
@@ -373,9 +373,9 @@ intersection zdd1 zdd2 = runST $ do
 difference :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 difference zdd1 zdd2 = runST $ do
   h <- C.newSized defaultTableSize
-  let f F _ = return F
-      f p F = return p
-      f p q | p == q = return F
+  let f Empty _ = return Empty
+      f p Empty = return p
+      f p q | p == q = return Empty
       f p q = do
         m <- H.lookup h (p, q)
         case m of
@@ -399,10 +399,10 @@ m1 \\ m2 = difference m1 m2
 nonSuperset :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 nonSuperset zdd1 zdd2 = runST $ do
   h <- C.newSized defaultTableSize
-  let f F _ = return F
-      f _ T = return F
-      f p F = return p
-      f p q | p == q = return F
+  let f Empty _ = return Empty
+      f _ Base = return Empty
+      f p Empty = return p
+      f p q | p == q = return Empty
       f p q = do
         m <- H.lookup h (p, q)
         case m of
@@ -421,8 +421,8 @@ nonSuperset zdd1 zdd2 = runST $ do
 minimalHittingSetsKnuth' :: forall a. ItemOrder a => Bool -> ZDD a -> ZDD a
 minimalHittingSetsKnuth' imai zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f F = return T
-      f T = return F
+  let f Empty = return Base
+      f Base = return Empty
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
@@ -475,8 +475,8 @@ hittingSetsBDD = fold' BDD.true BDD.false (\top h0 h1 -> h0 BDD..&&. bddNode top
 minimal :: forall a. ItemOrder a => BDD.BDD a -> ZDD a
 minimal bdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f BDD.F = return F
-      f BDD.T = return T
+  let f BDD.F = return Empty
+      f BDD.T = return Base
       f p@(BDD.Branch x lo hi) = do
         m <- H.lookup h p
         case m of
@@ -502,7 +502,7 @@ member xs zdd = member' xs' zdd
 member' :: forall a. (ItemOrder a) => [Int] -> ZDD a -> Bool
 member' = f
   where
-    f [] T = True
+    f [] Base = True
     f [] (Branch _ p0 _) = f [] p0
     f yys@(y:ys) (Branch top p0 p1) =
       case compareItem (Proxy :: Proxy a) y top of
@@ -565,7 +565,7 @@ fromListOfSortedList :: forall a. ItemOrder a => [[Int]] -> ZDD a
 fromListOfSortedList = unions . map f
   where
     f :: [Int] -> ZDD a
-    f = foldr (\x node -> Branch x F node) T
+    f = foldr (\x node -> Branch x Empty node) Base
 
 -- | Fold over the graph structure of the ZDD.
 --
@@ -574,8 +574,8 @@ fromListOfSortedList = unions . map f
 fold :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
 fold ff tt br zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f F = return ff
-      f T = return tt
+  let f Empty = return ff
+      f Base = return tt
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
@@ -592,8 +592,8 @@ fold ff tt br zdd = runST $ do
 fold' :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
 fold' !ff !tt br zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f F = return ff
-      f T = return tt
+  let f Empty = return ff
+      f Base = return tt
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
@@ -632,13 +632,13 @@ uniformM :: forall a g m. (ItemOrder a, StatefulGen g m) => ZDD a -> g -> m IntS
 #else
 uniformM :: forall a m. (ItemOrder a, PrimMonad m) => ZDD a -> Gen (PrimState m) -> m IntSet
 #endif
-uniformM F = error "Data.DecisionDiagram.ZDD.uniformM: empty ZDD"
+uniformM Empty = error "Data.DecisionDiagram.ZDD.uniformM: empty ZDD"
 uniformM zdd = func
   where
     func gen = f zdd []
       where
-        f F _ = error "Data.DecisionDiagram.ZDD.uniformM: should not happen"
-        f T r = return $ IntSet.fromList r
+        f Empty _ = error "Data.DecisionDiagram.ZDD.uniformM: should not happen"
+        f Base r = return $ IntSet.fromList r
         f p@(Branch top p0 p1) r = do
           b <- bernoulli (table HashMap.! p) gen
           if b then
@@ -649,8 +649,8 @@ uniformM zdd = func
     table :: HashMap (ZDD a) Double
     table = runST $ do
       h <- C.newSized defaultTableSize
-      let f F = return (0 :: Integer)
-          f T = return 1
+      let f Empty = return (0 :: Integer)
+          f Base = return 1
           f p@(Branch _ p0 p1) = do
             m <- H.lookup h p
             case m of
