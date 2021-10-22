@@ -461,13 +461,7 @@ minimalHittingSetsToda :: forall a. ItemOrder a => ZDD a -> ZDD a
 minimalHittingSetsToda = minimal . hittingSetsBDD
 
 hittingSetsBDD :: forall a. ItemOrder a => ZDD a -> BDD.BDD a
-hittingSetsBDD = fold' BDD.true BDD.false (\top h0 h1 -> h0 BDD..&&. bddNode top h1 BDD.true)
-  where
-    -- XXX
-    bddNode :: Int -> BDD.BDD a -> BDD.BDD a -> BDD.BDD a
-    bddNode ind lo hi
-      | lo == hi = lo
-      | otherwise = BDD.Branch ind lo hi
+hittingSetsBDD = fold' BDD.true BDD.false (\top h0 h1 -> h0 BDD..&&. BDD.Branch top h1 BDD.true)
 
 minimal :: forall a. ItemOrder a => BDD.BDD a -> ZDD a
 minimal bdd = runST $ do
@@ -492,25 +486,23 @@ minimalHittingSets = minimalHittingSetsToda
 
 -- | Is the set a member of the family?
 member :: forall a. (ItemOrder a) => IntSet -> ZDD a -> Bool
-member xs zdd = member' xs' zdd
+member xs = member' xs'
   where
     xs' = sortBy (compareItem (Proxy :: Proxy a)) $ IntSet.toList xs
 
 member' :: forall a. (ItemOrder a) => [Int] -> ZDD a -> Bool
-member' = f
-  where
-    f [] Base = True
-    f [] (Branch _ p0 _) = f [] p0
-    f yys@(y:ys) (Branch top p0 p1) =
-      case compareItem (Proxy :: Proxy a) y top of
-        EQ -> f ys p1
-        GT -> f yys p0
-        LT -> False
-    f _ _ = False
+member' [] Base = True
+member' [] (Branch _ p0 _) = member' [] p0
+member' yys@(y:ys) (Branch top p0 p1) =
+  case compareItem (Proxy :: Proxy a) y top of
+    EQ -> member' ys p1
+    GT -> member' yys p0
+    LT -> False
+member' _ _ = False
 
 -- | Is the set not in the family?
 notMember :: forall a. (ItemOrder a) => IntSet -> ZDD a -> Bool
-notMember xs zdd = not (member xs zdd)
+notMember xs = not . member xs
 
 -- | Is this the empty set?
 null :: ZDD a -> Bool
