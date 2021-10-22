@@ -2,9 +2,11 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 ----------------------------------------------------------------------
 -- |
 -- Module      :  Data.DecisionDiagram.ZDD
@@ -28,7 +30,7 @@
 module Data.DecisionDiagram.ZDD
   (
   -- * ZDD type
-    ZDD (..)
+    ZDD (ZDD, F, T, Branch)
 
   -- * Item ordering
   , ItemOrder (..)
@@ -126,7 +128,7 @@ import System.Random.MWC (Gen)
 import System.Random.MWC.Distributions (bernoulli)
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
-import Data.DecisionDiagram.BDD.Internal.Node
+import qualified Data.DecisionDiagram.BDD.Internal.Node as Node
 import qualified Data.DecisionDiagram.BDD as BDD
 
 -- ------------------------------------------------------------------------
@@ -137,8 +139,23 @@ defaultTableSize = 256
 -- ------------------------------------------------------------------------
 
 -- | Zero-suppressed binary decision diagram representing family of sets
-newtype ZDD a = ZDD Node
+newtype ZDD a = ZDD Node.Node
   deriving (Eq, Hashable, Show)
+
+pattern F :: ZDD a
+pattern F = ZDD Node.F
+
+pattern T :: ZDD a
+pattern T = ZDD Node.T
+
+pattern Branch :: Int -> ZDD a -> ZDD a -> ZDD a
+pattern Branch x lo hi <- ZDD (Node.Branch x (ZDD -> lo) (ZDD -> hi)) where
+  Branch x (ZDD lo) (ZDD hi) = ZDD (Node.Branch x lo hi)
+
+{-# COMPLETE T, F, Branch #-}
+
+nodeId :: ZDD a -> Int
+nodeId (ZDD node) = Node.nodeId node
 
 instance ItemOrder a => Exts.IsList (ZDD a) where
   type Item (ZDD a) = IntSet
@@ -150,32 +167,32 @@ instance ItemOrder a => Exts.IsList (ZDD a) where
 
   toList = fold' [] [IntSet.empty] (\top lo hi -> lo <> map (IntSet.insert top) hi)
 
-zddNode :: Int -> Node -> Node -> Node
+zddNode :: Int -> ZDD a -> ZDD a -> ZDD a
 zddNode _ p0 F = p0
 zddNode top p0 p1 = Branch top p0 p1
 
-data ZDDCase2Node
-  = ZDDCase2LT Int Node Node
-  | ZDDCase2GT Int Node Node
-  | ZDDCase2EQ Int Node Node Node Node
+data ZDDCase2 a
+  = ZDDCase2LT Int (ZDD a) (ZDD a)
+  | ZDDCase2GT Int (ZDD a) (ZDD a)
+  | ZDDCase2EQ Int (ZDD a) (ZDD a) (ZDD a) (ZDD a)
 
-zddCase2Node :: forall a. ItemOrder a => Proxy a -> Node -> Node -> ZDDCase2Node
-zddCase2Node _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
+zddCase2 :: forall a. ItemOrder a => Proxy a -> ZDD a -> ZDD a -> ZDDCase2 a
+zddCase2 _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
   case compareItem (Proxy :: Proxy a) ptop qtop of
     LT -> ZDDCase2LT ptop p0 p1
     GT -> ZDDCase2GT qtop q0 q1
     EQ -> ZDDCase2EQ ptop p0 p1 q0 q1
-zddCase2Node _ (Branch ptop p0 p1) _ = ZDDCase2LT ptop p0 p1
-zddCase2Node _ _ (Branch qtop q0 q1) = ZDDCase2GT qtop q0 q1
-zddCase2Node _ _ _ = error "should not happen"
+zddCase2 _ (Branch ptop p0 p1) _ = ZDDCase2LT ptop p0 p1
+zddCase2 _ _ (Branch qtop q0 q1) = ZDDCase2GT qtop q0 q1
+zddCase2 _ _ _ = error "should not happen"
 
 -- | The empty set (∅).
 empty :: ZDD a
-empty = ZDD F
+empty = F
 
 -- | The set containing only the empty set ({∅}).
 base :: ZDD a
-base = ZDD T
+base = T
 
 -- | Create a ZDD that contains only a given set.
 singleton :: forall a. ItemOrder a => IntSet -> ZDD a
@@ -183,7 +200,7 @@ singleton xs = insert xs empty
 
 -- | Select subsets that contain a particular element and then remove the element from them
 subset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
-subset1 var (ZDD node) = runST $ do
+subset1 var zdd = runST $ do
   h <- C.newSized defaultTableSize
   let f T = return F
       f F = return F
@@ -198,12 +215,11 @@ subset1 var (ZDD node) = runST $ do
               LT -> liftM2 (zddNode top) (f p0) (f p1)
             H.insert h p ret
             return ret
-  ret <- f node
-  return (ZDD ret)
+  f zdd
 
 -- | Subsets that does not contain a particular element
 subset0 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
-subset0 var (ZDD node) = runST $ do
+subset0 var zdd = runST $ do
   h <- C.newSized defaultTableSize
   let f p@T = return p
       f F = return F
@@ -218,12 +234,11 @@ subset0 var (ZDD node) = runST $ do
               LT -> liftM2 (zddNode top) (f p0) (f p1)
             H.insert h p ret
             return ret
-  ret <- f node
-  return (ZDD ret)
+  f zdd
 
 -- | Insert a set into the ZDD.
 insert :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
-insert xs (ZDD node) = ZDD $ f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs)) node
+insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
     f [] F = T
     f [] T = T
@@ -238,7 +253,7 @@ insert xs (ZDD node) = ZDD $ f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.
 
 -- | Delete a set from the ZDD.
 delete :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
-delete xs (ZDD node) = ZDD $ f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs)) node
+delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
     f [] F = F
     f [] T = F
@@ -253,7 +268,7 @@ delete xs (ZDD node) = ZDD $ f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.
 
 -- | Insert an item into each element set of ZDD.
 mapInsert :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
-mapInsert var (ZDD node) = runST $ do
+mapInsert var zdd = runST $ do
   h <- C.newSized defaultTableSize
   let f p@T = return (zddNode var F p)
       f F = return F
@@ -265,17 +280,14 @@ mapInsert var (ZDD node) = runST $ do
             ret <- case compareItem (Proxy :: Proxy a) top var of
               GT -> return (zddNode var F p)
               LT -> liftM2 (zddNode top) (f p0) (f p1)
-              EQ ->
-                let ZDD r :: ZDD a = ZDD p0 `union` ZDD p1
-                 in return (zddNode top F r)
+              EQ -> return (zddNode top F (p0 `union` p1))
             H.insert h p ret
             return ret
-  ret <- f node
-  return (ZDD ret)
+  f zdd
 
 -- | Delete an item from each element set of ZDD.
 mapDelete :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
-mapDelete var (ZDD node) = runST $ do
+mapDelete var zdd = runST $ do
   h <- C.newSized defaultTableSize
   let f T = return T
       f F = return F
@@ -287,17 +299,14 @@ mapDelete var (ZDD node) = runST $ do
             ret <- case compareItem (Proxy :: Proxy a) top var of
               GT -> return p
               LT -> liftM2 (zddNode top) (f p0) (f p1)
-              EQ ->
-                let ZDD r :: ZDD a = ZDD p0 `union` ZDD p1
-                 in return r
+              EQ -> return (p0 `union` p1)
             H.insert h p ret
             return ret
-  ret <- f node
-  return (ZDD ret)
+  f zdd
 
 -- | @change x p@ returns {if x∈s then s∖{x} else s∪{x} | s∈P}
 change :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
-change var (ZDD node) = runST $ do
+change var zdd = runST $ do
   h <- C.newSized defaultTableSize
   let f p@T = return (zddNode var F p)
       f F = return F
@@ -312,12 +321,11 @@ change var (ZDD node) = runST $ do
               LT -> liftM2 (zddNode top) (f p0) (f p1)
             H.insert h p ret
             return ret
-  ret <- f node
-  return (ZDD ret)
+  f zdd
 
 -- | Union of two family of sets.
 union :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
-union (ZDD node1) (ZDD node2) = runST $ do
+union zdd1 zdd2 = runST $ do
   h <- C.newSized defaultTableSize
   let f F q = return q
       f p F = return p
@@ -328,14 +336,13 @@ union (ZDD node1) (ZDD node2) = runST $ do
         case m of
           Just ret -> return ret
           Nothing -> do
-            ret <- case zddCase2Node (Proxy :: Proxy a) p q of
+            ret <- case zddCase2 (Proxy :: Proxy a) p q of
               ZDDCase2LT ptop p0 p1 -> liftM2 (zddNode ptop) (f p0 q) (pure p1)
               ZDDCase2GT qtop q0 q1 -> liftM2 (zddNode qtop) (f p q0) (pure q1)
               ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (zddNode top) (f p0 q0) (f p1 q1)
             H.insert h key ret
             return ret
-  ret <- f node1 node2
-  return (ZDD ret)
+  f zdd1 zdd2
 
 -- | Unions of a list of ZDDs.
 unions :: forall f a. (Foldable f, ItemOrder a) => f (ZDD a) -> ZDD a
@@ -343,7 +350,7 @@ unions xs = Foldable.foldl' union empty xs
 
 -- | Intersection of two family of sets.
 intersection :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
-intersection (ZDD node1) (ZDD node2) = runST $ do
+intersection zdd1 zdd2 = runST $ do
   h <- C.newSized defaultTableSize
   let f F _q = return F
       f _p F = return F
@@ -354,18 +361,17 @@ intersection (ZDD node1) (ZDD node2) = runST $ do
         case m of
           Just ret -> return ret
           Nothing -> do
-            ret <- case zddCase2Node (Proxy :: Proxy a) p q of
+            ret <- case zddCase2 (Proxy :: Proxy a) p q of
               ZDDCase2LT _ptop p0 _p1 -> f p0 q
               ZDDCase2GT _qtop q0 _q1 -> f p q0
               ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (zddNode top) (f p0 q0) (f p1 q1)
             H.insert h key ret
             return ret
-  ret <- f node1 node2
-  return (ZDD ret)
+  f zdd1 zdd2
 
 -- | Difference of two family of sets.
 difference :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
-difference (ZDD node1) (ZDD node2) = runST $ do
+difference zdd1 zdd2 = runST $ do
   h <- C.newSized defaultTableSize
   let f F _ = return F
       f p F = return p
@@ -375,14 +381,13 @@ difference (ZDD node1) (ZDD node2) = runST $ do
         case m of
           Just ret -> return ret
           Nothing -> do
-            ret <- case zddCase2Node (Proxy :: Proxy a) p q of
+            ret <- case zddCase2 (Proxy :: Proxy a) p q of
               ZDDCase2LT ptop p0 p1 -> liftM2 (zddNode ptop) (f p0 q) (pure p1)
               ZDDCase2GT _qtop q0 _q1 -> f p q0
               ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (zddNode top) (f p0 q0) (f p1 q1)
             H.insert h (p, q) ret
             return ret
-  ret <- f node1 node2
-  return (ZDD ret)
+  f zdd1 zdd2
 
 -- | See 'difference'
 (\\) :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
@@ -392,7 +397,7 @@ m1 \\ m2 = difference m1 m2
 --
 -- Sometimes it is denoted as /P ↘ Q/.
 nonSuperset :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
-nonSuperset (ZDD node1) (ZDD node2) = runST $ do
+nonSuperset zdd1 zdd2 = runST $ do
   h <- C.newSized defaultTableSize
   let f F _ = return F
       f _ T = return F
@@ -403,21 +408,18 @@ nonSuperset (ZDD node1) (ZDD node2) = runST $ do
         case m of
           Just ret -> return ret
           Nothing -> do
-            ret <- case zddCase2Node (Proxy :: Proxy a) p q of
+            ret <- case zddCase2 (Proxy :: Proxy a) p q of
               ZDDCase2LT ptop p0 p1 -> liftM2 (zddNode ptop) (f p0 q) (f p1 q)
               ZDDCase2GT _qtop q0 _q1 -> f p q0
               ZDDCase2EQ top p0 p1 q0 q1 -> do
-                n0 <- f p1 q0
-                n1 <- f p1 q1
-                let ZDD r = intersection (ZDD n0 :: ZDD a) (ZDD n1) -- TODO: memoize intersection?
+                r <- liftM2 intersection (f p1 q0) (f p1 q1)
                 liftM2 (zddNode top) (f p0 q0) (pure r)
             H.insert h (p, q) ret
             return ret
-  ret <- f node1 node2
-  return (ZDD ret)
+  f zdd1 zdd2
 
 minimalHittingSetsKnuth' :: forall a. ItemOrder a => Bool -> ZDD a -> ZDD a
-minimalHittingSetsKnuth' imai (ZDD node) = runST $ do
+minimalHittingSetsKnuth' imai zdd = runST $ do
   h <- C.newSized defaultTableSize
   let f F = return T
       f T = return F
@@ -427,14 +429,12 @@ minimalHittingSetsKnuth' imai (ZDD node) = runST $ do
           Just ret -> return ret
           Nothing -> do
             -- TODO: memoize union and difference/nonSuperset?
-            r0 <- case union (ZDD p0) (ZDD p1) :: ZDD a of
-                    ZDD r -> f r
-            ZDD r1 <- liftM2 (if imai then difference else nonSuperset) (liftM ZDD (f p0)) (pure (ZDD r0 :: ZDD a))
+            r0 <- f (union p0 p1)
+            r1 <- liftM2 (if imai then difference else nonSuperset) (f p0) (pure r0)
             let ret = zddNode top r0 r1
             H.insert h p ret
             return ret
-  ret <- f node
-  return (ZDD ret)
+  f zdd
 
 -- | Minimal hitting sets.
 --
@@ -468,28 +468,26 @@ hittingSetsBDD = fold' BDD.true BDD.false (\top h0 h1 -> h0 BDD..&&. bddNode top
   where
     -- XXX
     bddNode :: Int -> BDD.BDD a -> BDD.BDD a -> BDD.BDD a
-    bddNode ind (BDD.BDD lo) (BDD.BDD hi)
-      | lo == hi = BDD.BDD lo
-      | otherwise = BDD.BDD (Branch ind lo hi)
+    bddNode ind lo hi
+      | lo == hi = lo
+      | otherwise = BDD.Branch ind lo hi
 
 minimal :: forall a. ItemOrder a => BDD.BDD a -> ZDD a
-minimal (BDD.BDD node) = runST $ do
+minimal bdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f F = return F
-      f T = return T
-      f p@(Branch x lo hi) = do
+  let f BDD.F = return F
+      f BDD.T = return T
+      f p@(BDD.Branch x lo hi) = do
         m <- H.lookup h p
         case m of
           Just ret -> return ret
           Nothing -> do
             ml <- f lo
             mh <- f hi
-            let ZDD t = difference (ZDD mh :: ZDD a) (ZDD ml)
-                ret = zddNode x ml t
+            let ret = zddNode x ml (difference mh ml)
             H.insert h p ret
             return ret
-  ret <- f node
-  return (ZDD ret)
+  f bdd
 
 -- | See 'minimalHittingSetsToda'.
 minimalHittingSets :: forall a. ItemOrder a => ZDD a -> ZDD a
@@ -502,7 +500,7 @@ member xs zdd = member' xs' zdd
     xs' = sortBy (compareItem (Proxy :: Proxy a)) $ IntSet.toList xs
 
 member' :: forall a. (ItemOrder a) => [Int] -> ZDD a -> Bool
-member' xs (ZDD node) = f xs node
+member' = f
   where
     f [] T = True
     f [] (Branch _ p0 _) = f [] p0
@@ -567,14 +565,14 @@ fromListOfSortedList :: forall a. ItemOrder a => [[Int]] -> ZDD a
 fromListOfSortedList = unions . map f
   where
     f :: [Int] -> ZDD a
-    f = ZDD . foldr (\x node -> Branch x F node) T
+    f = foldr (\x node -> Branch x F node) T
 
 -- | Fold over the graph structure of the ZDD.
 --
 -- It takes values for substituting 'empty' and 'base',
 -- and a function for substiting non-terminal node.
 fold :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
-fold ff tt br (ZDD node) = runST $ do
+fold ff tt br zdd = runST $ do
   h <- C.newSized defaultTableSize
   let f F = return ff
       f T = return tt
@@ -588,11 +586,11 @@ fold ff tt br (ZDD node) = runST $ do
             let ret = br top r0 r1
             H.insert h p ret
             return ret
-  f node
+  f zdd
 
 -- | Strict version of 'fold'
 fold' :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
-fold' !ff !tt br (ZDD node) = runST $ do
+fold' !ff !tt br zdd = runST $ do
   h <- C.newSized defaultTableSize
   let f F = return ff
       f T = return tt
@@ -606,7 +604,7 @@ fold' !ff !tt br (ZDD node) = runST $ do
             let ret = br top r0 r1
             seq ret $ H.insert h p ret
             return ret
-  f node
+  f zdd
 
 -- ------------------------------------------------------------------------
 
@@ -634,10 +632,10 @@ uniformM :: forall a g m. (ItemOrder a, StatefulGen g m) => ZDD a -> g -> m IntS
 #else
 uniformM :: forall a m. (ItemOrder a, PrimMonad m) => ZDD a -> Gen (PrimState m) -> m IntSet
 #endif
-uniformM (ZDD F) = error "Data.DecisionDiagram.ZDD.uniformM: empty ZDD"
-uniformM (ZDD node) = func
+uniformM F = error "Data.DecisionDiagram.ZDD.uniformM: empty ZDD"
+uniformM zdd = func
   where
-    func gen = f node []
+    func gen = f zdd []
       where
         f F _ = error "Data.DecisionDiagram.ZDD.uniformM: should not happen"
         f T r = return $ IntSet.fromList r
@@ -648,7 +646,7 @@ uniformM (ZDD node) = func
           else
             f p0 r
 
-    table :: HashMap Node Double
+    table :: HashMap (ZDD a) Double
     table = runST $ do
       h <- C.newSized defaultTableSize
       let f F = return (0 :: Integer)
@@ -665,7 +663,7 @@ uniformM (ZDD node) = func
                     r = realToFrac (n1 % (n0 + n1))
                 seq r $ H.insert h p (s, r)
                 return s
-      _ <- f node
+      _ <- f zdd
       xs <- H.toList h
       return $ HashMap.fromList [(n, r) | (n, (_, r)) <- xs]
 
