@@ -20,19 +20,20 @@ category:            Data, Logic
 description:         Please see the README on GitHub at <https://github.com/msakai/haskell-decision-diagrams#readme>
 
 dependencies:
-- base >= 4.7 && < 5
-- containers
-- hashable
-- hashtables
-- intern >=0.9.1.2 && <1.0.0.0
-- mwc-random
-- primitive
-- random
-- reflection
-- unordered-containers
+- base >= 4.7 && <5
+- containers >=0.5.11.0 && <0.7
+- mwc-random >=0.13.6.0 && <0.16
 
 library:
   source-dirs: src
+  dependencies:
+  - hashable >=1.2.7.0 && <1.4
+  - hashtables >=1.2.3.1 && <1.3
+  - intern >=0.9.1.2 && <1.0.0.0
+  - primitive >=0.6.3.0 && <0.8
+  - random >=1.1 && <1.3
+  - reflection >=2.1.4 && <2.2
+  - unordered-containers >=0.2.9.0 && <0.3
 
 tests:
   decision-diagrams-test:
@@ -44,9 +45,9 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - decision-diagrams
-    - QuickCheck
-    - statistics
-    - tasty >=0.10.1
-    - tasty-hunit >=0.9 && <0.11
-    - tasty-quickcheck >=0.8 && <0.11
-    - tasty-th
+    - QuickCheck >=2.11.3 && <2.15
+    - statistics >=0.14.0.2 && <0.16
+    - tasty >=1.1.0.4 && <1.5
+    - tasty-hunit >=0.10.0.1 && <0.11
+    - tasty-quickcheck >=0.10 && <0.11
+    - tasty-th >=0.1.7 && <0.2
