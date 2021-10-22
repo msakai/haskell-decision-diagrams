@@ -20,36 +20,35 @@ import Test.Tasty
 import Test.Tasty.QuickCheck
 import Test.Tasty.TH
 
-import Data.DecisionDiagram.BDD.Internal.Node as Node
 import Data.DecisionDiagram.ZDD (ZDD (..), ItemOrder (..), withDefaultOrder)
 import qualified Data.DecisionDiagram.ZDD as ZDD
 
 -- ------------------------------------------------------------------------
 
 instance ZDD.ItemOrder a => Arbitrary (ZDD a) where
-  arbitrary = liftM ZDD $ do
+  arbitrary = do
     vars <- liftM (sortBy (ZDD.compareItem (Proxy :: Proxy a)) . IntSet.toList . IntSet.fromList) arbitrary
     let f vs n = oneof $
-          [ return Node.F
-          , return Node.T
+          [ return ZDD.empty
+          , return ZDD.base
           ]
           ++
           [ do v <- elements vs
                let vs' = dropWhile (\v' -> compareItem (Proxy :: Proxy a) v' v  /= GT) vs
                p0 <- f vs' (n `div` 2)
-               p1 <- f vs' (n `div` 2) `suchThat` (/= Node.F)
-               return (Node.Branch v p0 p1)
+               p1 <- f vs' (n `div` 2) `suchThat` (/= ZDD.empty)
+               return (ZDD.Branch v p0 p1)
           | n > 0, not (null vs)
           ]
     sized (f vars)
 
-  shrink (ZDD Node.F) = []
-  shrink (ZDD Node.T) = []
-  shrink (ZDD (Node.Branch x p0 p1)) =
-    [ZDD p0, ZDD p1]
+  shrink (ZDD.Empty) = []
+  shrink (ZDD.Base) = []
+  shrink (ZDD.Branch x p0 p1) =
+    [p0, p1]
     ++
-    [ ZDD (Node.Branch x p0' p1')
-    | (ZDD p0', ZDD p1') <- shrink (ZDD p0 :: ZDD a, ZDD p1 :: ZDD a), p1' /= Node.F
+    [ ZDD.Branch x p0' p1'
+    | (p0', p1') <- shrink (p0, p1), p1' /= ZDD.empty
     ]
 
 -- ------------------------------------------------------------------------
