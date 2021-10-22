@@ -150,6 +150,7 @@ pattern Base = ZDD Node.T
 
 pattern Branch :: Int -> ZDD a -> ZDD a -> ZDD a
 pattern Branch x lo hi <- ZDD (Node.Branch x (ZDD -> lo) (ZDD -> hi)) where
+  Branch _ p0 Empty = p0
   Branch x (ZDD lo) (ZDD hi) = ZDD (Node.Branch x lo hi)
 
 {-# COMPLETE Empty, Base, Branch #-}
@@ -166,10 +167,6 @@ instance ItemOrder a => Exts.IsList (ZDD a) where
       f = sortBy (compareItem (Proxy :: Proxy a)) . IntSet.toList
 
   toList = fold' [] [IntSet.empty] (\top lo hi -> lo <> map (IntSet.insert top) hi)
-
-zddNode :: Int -> ZDD a -> ZDD a -> ZDD a
-zddNode _ p0 Empty = p0
-zddNode top p0 p1 = Branch top p0 p1
 
 data ZDDCase2 a
   = ZDDCase2LT Int (ZDD a) (ZDD a)
@@ -212,7 +209,7 @@ subset1 var zdd = runST $ do
             ret <- case compareItem (Proxy :: Proxy a) top var of
               GT -> return Empty
               EQ -> return p1
-              LT -> liftM2 (zddNode top) (f p0) (f p1)
+              LT -> liftM2 (Branch top) (f p0) (f p1)
             H.insert h p ret
             return ret
   f zdd
@@ -231,7 +228,7 @@ subset0 var zdd = runST $ do
             ret <- case compareItem (Proxy :: Proxy a) top var of
               GT -> return p
               EQ -> return p0
-              LT -> liftM2 (zddNode top) (f p0) (f p1)
+              LT -> liftM2 (Branch top) (f p0) (f p1)
             H.insert h p ret
             return ret
   f zdd
@@ -242,14 +239,14 @@ insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
     f [] Empty = Base
     f [] Base = Base
-    f [] (Branch top p0 p1) = zddNode top (f [] p0) p1
-    f (y : ys) Empty = zddNode y Empty (f ys Empty)
-    f (y : ys) Base = zddNode y Base (f ys Empty)
+    f [] (Branch top p0 p1) = Branch top (f [] p0) p1
+    f (y : ys) Empty = Branch y Empty (f ys Empty)
+    f (y : ys) Base = Branch y Base (f ys Empty)
     f yys@(y : ys) p@(Branch top p0 p1) =
       case compareItem (Proxy :: Proxy a) y top of
-        LT -> zddNode y p (f ys Empty)
-        GT -> zddNode top (f yys p0) p1
-        EQ -> zddNode top p0 (f ys p1)
+        LT -> Branch y p (f ys Empty)
+        GT -> Branch top (f yys p0) p1
+        EQ -> Branch top p0 (f ys p1)
 
 -- | Delete a set from the ZDD.
 delete :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
@@ -257,20 +254,20 @@ delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
     f [] Empty = Empty
     f [] Base = Empty
-    f [] (Branch top p0 p1) = zddNode top (f [] p0) p1
+    f [] (Branch top p0 p1) = Branch top (f [] p0) p1
     f (_ : _) Empty = Empty
     f (_ : _) Base = Base
     f yys@(y : ys) p@(Branch top p0 p1) =
       case compareItem (Proxy :: Proxy a) y top of
         LT -> p
-        GT -> zddNode top (f yys p0) p1
-        EQ -> zddNode top p0 (f ys p1)
+        GT -> Branch top (f yys p0) p1
+        EQ -> Branch top p0 (f ys p1)
 
 -- | Insert an item into each element set of ZDD.
 mapInsert :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 mapInsert var zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f p@Base = return (zddNode var Empty p)
+  let f p@Base = return (Branch var Empty p)
       f Empty = return Empty
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
@@ -278,9 +275,9 @@ mapInsert var zdd = runST $ do
           Just ret -> return ret
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) top var of
-              GT -> return (zddNode var Empty p)
-              LT -> liftM2 (zddNode top) (f p0) (f p1)
-              EQ -> return (zddNode top Empty (p0 `union` p1))
+              GT -> return (Branch var Empty p)
+              LT -> liftM2 (Branch top) (f p0) (f p1)
+              EQ -> return (Branch top Empty (p0 `union` p1))
             H.insert h p ret
             return ret
   f zdd
@@ -298,7 +295,7 @@ mapDelete var zdd = runST $ do
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) top var of
               GT -> return p
-              LT -> liftM2 (zddNode top) (f p0) (f p1)
+              LT -> liftM2 (Branch top) (f p0) (f p1)
               EQ -> return (p0 `union` p1)
             H.insert h p ret
             return ret
@@ -308,7 +305,7 @@ mapDelete var zdd = runST $ do
 change :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 change var zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f p@Base = return (zddNode var Empty p)
+  let f p@Base = return (Branch var Empty p)
       f Empty = return Empty
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
@@ -316,9 +313,9 @@ change var zdd = runST $ do
           Just ret -> return ret
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) top var of
-              GT -> return (zddNode var Empty p)
-              EQ -> return (zddNode var p1 p0)
-              LT -> liftM2 (zddNode top) (f p0) (f p1)
+              GT -> return (Branch var Empty p)
+              EQ -> return (Branch var p1 p0)
+              LT -> liftM2 (Branch top) (f p0) (f p1)
             H.insert h p ret
             return ret
   f zdd
@@ -337,9 +334,9 @@ union zdd1 zdd2 = runST $ do
           Just ret -> return ret
           Nothing -> do
             ret <- case zddCase2 (Proxy :: Proxy a) p q of
-              ZDDCase2LT ptop p0 p1 -> liftM2 (zddNode ptop) (f p0 q) (pure p1)
-              ZDDCase2GT qtop q0 q1 -> liftM2 (zddNode qtop) (f p q0) (pure q1)
-              ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (zddNode top) (f p0 q0) (f p1 q1)
+              ZDDCase2LT ptop p0 p1 -> liftM2 (Branch ptop) (f p0 q) (pure p1)
+              ZDDCase2GT qtop q0 q1 -> liftM2 (Branch qtop) (f p q0) (pure q1)
+              ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (Branch top) (f p0 q0) (f p1 q1)
             H.insert h key ret
             return ret
   f zdd1 zdd2
@@ -364,7 +361,7 @@ intersection zdd1 zdd2 = runST $ do
             ret <- case zddCase2 (Proxy :: Proxy a) p q of
               ZDDCase2LT _ptop p0 _p1 -> f p0 q
               ZDDCase2GT _qtop q0 _q1 -> f p q0
-              ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (zddNode top) (f p0 q0) (f p1 q1)
+              ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (Branch top) (f p0 q0) (f p1 q1)
             H.insert h key ret
             return ret
   f zdd1 zdd2
@@ -382,9 +379,9 @@ difference zdd1 zdd2 = runST $ do
           Just ret -> return ret
           Nothing -> do
             ret <- case zddCase2 (Proxy :: Proxy a) p q of
-              ZDDCase2LT ptop p0 p1 -> liftM2 (zddNode ptop) (f p0 q) (pure p1)
+              ZDDCase2LT ptop p0 p1 -> liftM2 (Branch ptop) (f p0 q) (pure p1)
               ZDDCase2GT _qtop q0 _q1 -> f p q0
-              ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (zddNode top) (f p0 q0) (f p1 q1)
+              ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (Branch top) (f p0 q0) (f p1 q1)
             H.insert h (p, q) ret
             return ret
   f zdd1 zdd2
@@ -409,11 +406,11 @@ nonSuperset zdd1 zdd2 = runST $ do
           Just ret -> return ret
           Nothing -> do
             ret <- case zddCase2 (Proxy :: Proxy a) p q of
-              ZDDCase2LT ptop p0 p1 -> liftM2 (zddNode ptop) (f p0 q) (f p1 q)
+              ZDDCase2LT ptop p0 p1 -> liftM2 (Branch ptop) (f p0 q) (f p1 q)
               ZDDCase2GT _qtop q0 _q1 -> f p q0
               ZDDCase2EQ top p0 p1 q0 q1 -> do
                 r <- liftM2 intersection (f p1 q0) (f p1 q1)
-                liftM2 (zddNode top) (f p0 q0) (pure r)
+                liftM2 (Branch top) (f p0 q0) (pure r)
             H.insert h (p, q) ret
             return ret
   f zdd1 zdd2
@@ -431,7 +428,7 @@ minimalHittingSetsKnuth' imai zdd = runST $ do
             -- TODO: memoize union and difference/nonSuperset?
             r0 <- f (union p0 p1)
             r1 <- liftM2 (if imai then difference else nonSuperset) (f p0) (pure r0)
-            let ret = zddNode top r0 r1
+            let ret = Branch top r0 r1
             H.insert h p ret
             return ret
   f zdd
@@ -484,7 +481,7 @@ minimal bdd = runST $ do
           Nothing -> do
             ml <- f lo
             mh <- f hi
-            let ret = zddNode x ml (difference mh ml)
+            let ret = Branch x ml (difference mh ml)
             H.insert h p ret
             return ret
   f bdd

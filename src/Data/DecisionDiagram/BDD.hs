@@ -79,17 +79,14 @@ pattern T = BDD Node.T
 
 pattern Branch :: Int -> BDD a -> BDD a -> BDD a
 pattern Branch x lo hi <- BDD (Node.Branch x (BDD -> lo) (BDD -> hi)) where
-  Branch x (BDD lo) (BDD hi) = BDD (Node.Branch x lo hi)
+  Branch x (BDD lo) (BDD hi)
+    | lo == hi = BDD lo
+    | otherwise = BDD (Node.Branch x lo hi)
 
 {-# COMPLETE T, F, Branch #-}
 
 nodeId :: BDD a -> Int
 nodeId (BDD node) = Node.nodeId node
-
-bddNode :: Int -> BDD a -> BDD a -> BDD a
-bddNode ind lo hi
-  | lo == hi = lo
-  | otherwise = Branch ind lo hi
 
 -- | True
 true :: BDD a
@@ -114,7 +111,7 @@ notB bdd = runST $ do
         case m of
           Just y -> return y
           Nothing -> do
-            ret <- liftM2 (bddNode ind) (f lo) (f hi)
+            ret <- liftM2 (Branch ind) (f lo) (f hi)
             H.insert h n ret
             return ret
   f bdd
@@ -135,9 +132,9 @@ bdd1 .&&. bdd2 = runST $ do
           Just y -> return y
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) ind1 ind2 of
-              EQ -> liftM2 (bddNode ind1) (f lo1 lo2) (f hi1 hi2)
-              LT -> liftM2 (bddNode ind1) (f lo1 n2) (f hi1 n2)
-              GT -> liftM2 (bddNode ind2) (f n1 lo2) (f n1 hi2)
+              EQ -> liftM2 (Branch ind1) (f lo1 lo2) (f hi1 hi2)
+              LT -> liftM2 (Branch ind1) (f lo1 n2) (f hi1 n2)
+              GT -> liftM2 (Branch ind2) (f n1 lo2) (f n1 hi2)
             H.insert h key ret
             return ret
   f bdd1 bdd2
@@ -158,9 +155,9 @@ bdd1 .||. bdd2 = runST $ do
           Just y -> return y
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) ind1 ind2 of
-              EQ -> liftM2 (bddNode ind1) (f lo1 lo2) (f hi1 hi2)
-              LT -> liftM2 (bddNode ind1) (f lo1 n2) (f hi1 n2)
-              GT -> liftM2 (bddNode ind2) (f n1 lo2) (f n1 hi2)
+              EQ -> liftM2 (Branch ind1) (f lo1 lo2) (f hi1 hi2)
+              LT -> liftM2 (Branch ind1) (f lo1 n2) (f hi1 n2)
+              GT -> liftM2 (Branch ind2) (f n1 lo2) (f n1 hi2)
             H.insert h key ret
             return ret
   f bdd1 bdd2
