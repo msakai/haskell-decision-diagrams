@@ -11,8 +11,8 @@ import Test.Tasty
 import Test.Tasty.QuickCheck
 import Test.Tasty.TH
 
-import Data.DecisionDiagram.BDD.Internal as Internal
-import Data.DecisionDiagram.BDD (BDD (..))
+import Data.DecisionDiagram.BDD.Internal.Node as Node
+import Data.DecisionDiagram.BDD (BDD (..), ItemOrder (..), withDefaultOrder)
 import qualified Data.DecisionDiagram.BDD as BDD
 
 -- ------------------------------------------------------------------------
@@ -21,25 +21,25 @@ instance BDD.ItemOrder a => Arbitrary (BDD a) where
   arbitrary = liftM BDD $ do
     vars <- liftM (sortBy (BDD.compareItem (Proxy :: Proxy a)) . IntSet.toList . IntSet.fromList) arbitrary
     let f vs n = oneof $
-          [ return Internal.F
-          , return Internal.T
+          [ return Node.F
+          , return Node.T
           ]
           ++
           [ do v <- elements vs
                let vs' = dropWhile (\v' -> compareItem (Proxy :: Proxy a) v' v  /= GT) vs
                lo <- f vs' (n `div` 2)
                hi <- f vs' (n `div` 2) `suchThat` (/= lo)
-               return (Internal.Branch v lo hi)
+               return (Node.Branch v lo hi)
           | n > 0, not (null vs)
           ]
     sized (f vars)
 
-  shrink (BDD Internal.F) = []
-  shrink (BDD Internal.T) = []
-  shrink (BDD (Internal.Branch x p0 p1)) =
+  shrink (BDD Node.F) = []
+  shrink (BDD Node.T) = []
+  shrink (BDD (Node.Branch x p0 p1)) =
     [BDD p0, BDD p1]
     ++
-    [ BDD (Internal.Branch x p0' p1')
+    [ BDD (Node.Branch x p0' p1')
     | (BDD p0', BDD p1') <- shrink (BDD p0 :: BDD a, BDD p1 :: BDD a), p0' /= p1'
     ]
 

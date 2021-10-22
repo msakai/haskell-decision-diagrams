@@ -125,7 +125,8 @@ import System.Random.MWC (Gen)
 #endif
 import System.Random.MWC.Distributions (bernoulli)
 
-import Data.DecisionDiagram.BDD.Internal
+import Data.DecisionDiagram.BDD.Internal.ItemOrder
+import Data.DecisionDiagram.BDD.Internal.Node
 import qualified Data.DecisionDiagram.BDD as BDD
 
 -- ------------------------------------------------------------------------

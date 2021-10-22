@@ -52,7 +52,8 @@ import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
 import Data.Proxy
 
-import Data.DecisionDiagram.BDD.Internal
+import Data.DecisionDiagram.BDD.Internal.ItemOrder
+import Data.DecisionDiagram.BDD.Internal.Node
 
 infixr 3 .&&.
 infixr 2 .||.
