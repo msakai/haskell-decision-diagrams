@@ -15,6 +15,7 @@ import qualified GHC.Exts as Exts
 import Statistics.Distribution
 import Statistics.Distribution.ChiSquared (chiSquared)
 import qualified System.Random.MWC as Rand
+import Test.QuickCheck.Function (apply)
 import qualified Test.QuickCheck.Monadic as QM
 import Test.Tasty
 import Test.Tasty.QuickCheck
@@ -494,6 +495,34 @@ prop_uniformM =
         QM.assert $ and [xs `ZDD.member` a | xs <- Map.keys hist_actual]
         QM.monitor $ counterexample $ "χ² = " ++ show chi_sq ++ " >= " ++ show threshold
         QM.assert $ chi_sq < threshold
+
+prop_findMinSum :: Property
+prop_findMinSum =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll (arbitrary `suchThat` (not . ZDD.null)) $ \(a :: ZDD o) ->
+      forAll arbitrary $ \(weight' :: Fun Int Integer) ->
+        let weight = apply weight'
+            setWeight s = sum [weight x | x <- IntSet.toList s]
+            (obj0, s0) = ZDD.findMinSum weight a
+         in counterexample (show [(x, weight x) | x <- IntSet.toList (ZDD.flatten a)]) $
+            counterexample (show (obj0, s0)) $
+              setWeight s0 === obj0
+              .&&.
+              conjoin [counterexample (show (s, setWeight s)) $ obj0 <= setWeight s | s <- ZDD.toListOfIntSets a]
+
+prop_findMaxSum :: Property
+prop_findMaxSum =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll (arbitrary `suchThat` (not . ZDD.null)) $ \(a :: ZDD o) ->
+      forAll arbitrary $ \(weight' :: Fun Int Integer) ->
+        let weight = apply weight'
+            setWeight s = sum [weight x | x <- IntSet.toList s]
+            (obj0, s0) = ZDD.findMaxSum weight a
+         in counterexample (show [(x, weight x) | x <- IntSet.toList (ZDD.flatten a)]) $
+            counterexample (show (obj0, s0)) $
+              setWeight s0 === obj0
+              .&&.
+              conjoin [counterexample (show (s, setWeight s)) $ obj0 >= setWeight s | s <- ZDD.toListOfIntSets a]
 
 -- ------------------------------------------------------------------------
 
