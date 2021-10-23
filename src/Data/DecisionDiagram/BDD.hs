@@ -77,6 +77,7 @@ pattern F = BDD Node.F
 pattern T :: BDD a
 pattern T = BDD Node.T
 
+-- | Smart constructor that takes the BDD reduction rules into account
 pattern Branch :: Int -> BDD a -> BDD a -> BDD a
 pattern Branch x lo hi <- BDD (Node.Branch x (BDD -> lo) (BDD -> hi)) where
   Branch x (BDD lo) (BDD hi)

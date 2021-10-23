@@ -148,6 +148,7 @@ pattern Empty = ZDD Node.F
 pattern Base :: ZDD a
 pattern Base = ZDD Node.T
 
+-- | Smart constructor that takes the ZDD reduction rules into account
 pattern Branch :: Int -> ZDD a -> ZDD a -> ZDD a
 pattern Branch x lo hi <- ZDD (Node.Branch x (ZDD -> lo) (ZDD -> hi)) where
   Branch _ p0 Empty = p0
