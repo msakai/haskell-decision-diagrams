@@ -88,6 +88,10 @@ module Data.DecisionDiagram.ZDD
   -- * Random sampling
   , uniformM
 
+  -- * Min/Max
+  , findMinSum
+  , findMaxSum
+
   -- * Misc
   , flatten
 
@@ -112,6 +116,7 @@ import qualified Data.HashTable.ST.Cuckoo as C
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List (sortBy)
+import Data.Maybe
 import Data.Proxy
 import Data.Ratio
 import Data.Set (Set)
@@ -667,5 +672,45 @@ uniformM (ZDD node) = func
       _ <- f node
       xs <- H.toList h
       return $ HashMap.fromList [(n, r) | (n, (_, r)) <- xs]
+
+-- ------------------------------------------------------------------------
+
+-- | Find a minimum element set with respect to given weight function
+--
+-- \[
+-- \min_{X\in S} \sum_{x\in X} w(x)
+-- \]
+findMinSum :: forall a w. (ItemOrder a, Num w, Ord w) => (Int -> w) -> ZDD a -> (w, IntSet)
+findMinSum weight =
+  fromMaybe (error "Data.DecisionDiagram.ZDD.findMinSum: empty ZDD") .
+    fold' Nothing (Just (0, IntSet.empty)) f
+  where
+    f _ _ Nothing = undefined
+    f x z1 (Just (w2, s2)) =
+      case z1 of
+        Just (w1, _) | w1 <= w2' -> z1
+        _ -> seq w2' $ seq s2' $ Just (w2', s2')
+      where
+        w2' = w2 + weight x
+        s2' = IntSet.insert x s2
+
+-- | Find a maximum element set with respect to given weight function
+--
+-- \[
+-- \max_{X\in S} \sum_{x\in X} w(x)
+-- \]
+findMaxSum :: forall a w. (ItemOrder a, Num w, Ord w) => (Int -> w) -> ZDD a -> (w, IntSet)
+findMaxSum weight =
+  fromMaybe (error "Data.DecisionDiagram.ZDD.findMinSum: empty ZDD") .
+    fold' Nothing (Just (0, IntSet.empty)) f
+  where
+    f _ _ Nothing = undefined
+    f x z1 (Just (w2, s2)) =
+      case z1 of
+        Just (w1, _) | w1 >= w2' -> z1
+        _ -> seq w2' $ seq s2' $ Just (w2', s2')
+      where
+        w2' = w2 + weight x
+        s2' = IntSet.insert x s2
 
 -- ------------------------------------------------------------------------
