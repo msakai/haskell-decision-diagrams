@@ -27,7 +27,8 @@ source-repository head
 library
   exposed-modules:
       Data.DecisionDiagram.BDD
-      Data.DecisionDiagram.BDD.Internal
+      Data.DecisionDiagram.BDD.Internal.ItemOrder
+      Data.DecisionDiagram.BDD.Internal.Node
       Data.DecisionDiagram.ZDD
   other-modules:
       Paths_decision_diagrams
