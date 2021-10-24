@@ -271,5 +271,66 @@ prop_evaluate_or =
 
 -- ------------------------------------------------------------------------
 
+prop_restrict :: Property
+prop_restrict =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \x ->
+        let b = (BDD.var x BDD..&&. BDD.restrict x True a) BDD..||.
+                (BDD.notB (BDD.var x) BDD..&&. BDD.restrict x False a)
+         in a === b
+
+prop_restrict_idempotent :: Property
+prop_restrict_idempotent =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \(x, val) ->
+        let b = BDD.restrict x val a
+            c = BDD.restrict x val b
+         in counterexample (show (b, c)) $ b === c
+
+prop_restrict_not :: Property
+prop_restrict_not =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \(x, val) ->
+        BDD.restrict x val (BDD.notB a) === BDD.notB (BDD.restrict x val a)
+
+prop_restrict_and :: Property
+prop_restrict_and =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b) ->
+      forAll arbitrary $ \(x, val) ->
+        BDD.restrict x val (a BDD..&&. b) === (BDD.restrict x val a BDD..&&. BDD.restrict x val b)
+
+prop_restrict_or :: Property
+prop_restrict_or =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b) ->
+      forAll arbitrary $ \(x, val) ->
+        BDD.restrict x val (a BDD..||. b) === (BDD.restrict x val a BDD..||. BDD.restrict x val b)
+
+prop_restrict_var :: Property
+prop_restrict_var =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \x ->
+      let a :: BDD o
+          a = BDD.var x
+       in (BDD.restrict x True a === BDD.true) .&&.
+          (BDD.restrict x False a === BDD.false)
+
+prop_restrict_support :: Property
+prop_restrict_support =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \(x, val) ->
+        let b = BDD.restrict x val a
+            xs = BDD.support b
+         in counterexample (show b) $
+            counterexample (show xs) $
+              x `IntSet.notMember` xs
+
+-- ------------------------------------------------------------------------
+
 bddTestGroup :: TestTree
 bddTestGroup = $(testGroupGenerator)

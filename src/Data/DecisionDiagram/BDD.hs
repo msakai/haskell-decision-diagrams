@@ -50,6 +50,9 @@ module Data.DecisionDiagram.BDD
   , support
   , evaluate
 
+  -- * Restriction
+  , restrict
+
   -- * Fold
   , fold
   , fold'
@@ -242,6 +245,27 @@ evaluate f = g
     g (Branch x lo hi)
       | f x = g hi
       | otherwise = g lo
+
+-- ------------------------------------------------------------------------
+
+-- | Compute \(F_x \) or \(F_{\neg x} \).
+restrict :: forall a. ItemOrder a => Int -> Bool -> BDD a -> BDD a
+restrict x val bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f T = return T
+      f F = return F
+      f n@(Branch ind lo hi) = do
+        m <- H.lookup h n
+        case m of
+          Just y -> return y
+          Nothing -> do
+            ret <- case compareItem (Proxy :: Proxy a) ind x of
+              GT -> return n
+              LT -> liftM2 (Branch ind) (f lo) (f hi)
+              EQ -> if val then return hi else return lo
+            H.insert h n ret
+            return ret
+  f bdd
 
 -- ------------------------------------------------------------------------
 
