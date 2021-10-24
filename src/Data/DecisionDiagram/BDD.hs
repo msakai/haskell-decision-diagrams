@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
@@ -44,6 +45,10 @@ module Data.DecisionDiagram.BDD
   , (.||.)
   , andB
   , orB
+
+  -- * Fold
+  , fold
+  , fold'
 
   -- * Evaluation
   , evaluate
@@ -173,6 +178,47 @@ andB xs = Foldable.foldl' (.&&.) true xs
 -- | Disjunction of a list of BDDs.
 orB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a
 orB xs = Foldable.foldl' (.||.) false xs
+
+-- ------------------------------------------------------------------------
+
+-- | Fold over the graph structure of the BDD.
+--
+-- It takes values for substituting 'false' ('F') and 'true' ('T'),
+-- and a function for substiting non-terminal node ('Branch').
+fold :: b -> b -> (Int -> b -> b -> b) -> BDD a -> b
+fold ff tt br bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f F = return ff
+      f T = return tt
+      f p@(Branch top lo hi) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            r0 <- f lo
+            r1 <- f hi
+            let ret = br top r0 r1
+            H.insert h p ret
+            return ret
+  f bdd
+
+-- | Strict version of 'fold'
+fold' :: b -> b -> (Int -> b -> b -> b) -> BDD a -> b
+fold' !ff !tt br bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f F = return ff
+      f T = return tt
+      f p@(Branch top lo hi) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            r0 <- f lo
+            r1 <- f hi
+            let ret = br top r0 r1
+            seq ret $ H.insert h p ret
+            return ret
+  f bdd
 
 -- ------------------------------------------------------------------------
 
