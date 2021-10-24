@@ -44,6 +44,9 @@ module Data.DecisionDiagram.BDD
   , (.||.)
   , andB
   , orB
+
+  -- * Evaluation
+  , evaluate
   ) where
 
 import Control.Monad
@@ -170,6 +173,22 @@ andB xs = Foldable.foldl' (.&&.) true xs
 -- | Disjunction of a list of BDDs.
 orB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a
 orB xs = Foldable.foldl' (.||.) false xs
+
+-- ------------------------------------------------------------------------
+
+-- | Evaluate a boolean function represented as BDD under the valuation
+-- given by @(Int -> Bool)@, i.e. it lifts a valuation function from
+-- variables to BDDs.
+evaluate :: (Int -> Bool) -> BDD a -> Bool
+evaluate f = g
+  where
+    g F = False
+    g T = True
+    g (Branch x lo hi)
+      | f x = g hi
+      | otherwise = g lo
+
+-- ------------------------------------------------------------------------
 
 -- https://ja.wikipedia.org/wiki/%E4%BA%8C%E5%88%86%E6%B1%BA%E5%AE%9A%E5%9B%B3
 _test_bdd :: BDD DefaultOrder

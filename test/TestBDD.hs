@@ -7,6 +7,7 @@ import Control.Monad
 import qualified Data.IntSet as IntSet
 import Data.List
 import Data.Proxy
+import Test.QuickCheck.Function (apply)
 import Test.Tasty
 import Test.Tasty.QuickCheck
 import Test.Tasty.TH
@@ -195,6 +196,40 @@ prop_de_morgan_2 =
   withDefaultOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(a :: BDD o, b) ->
       BDD.notB (a BDD..&&. b) === (BDD.notB a BDD..||. BDD.notB b)
+
+-- ------------------------------------------------------------------------
+
+prop_evaluate_var :: Property
+prop_evaluate_var =
+ forAll arbitrary $ \(f' :: Fun Int Bool) ->
+   let f = apply f'
+    in withDefaultOrder $ \(_ :: Proxy o) ->
+         forAll arbitrary $ \x ->
+           BDD.evaluate f (BDD.var x :: BDD o) === f x
+
+prop_evaluate_not :: Property
+prop_evaluate_not =
+ forAll arbitrary $ \(f' :: Fun Int Bool) ->
+   let f = apply f'
+    in withDefaultOrder $ \(_ :: Proxy o) ->
+         forAll arbitrary $ \(a :: BDD o) ->
+           BDD.evaluate f (BDD.notB a) === not (BDD.evaluate f a)
+
+prop_evaluate_and :: Property
+prop_evaluate_and =
+ forAll arbitrary $ \(f' :: Fun Int Bool) ->
+   let f = apply f'
+    in withDefaultOrder $ \(_ :: Proxy o) ->
+         forAll arbitrary $ \(a :: BDD o, b) ->
+           BDD.evaluate f (a BDD..&&. b) === (BDD.evaluate f a && BDD.evaluate f b)
+
+prop_evaluate_or :: Property
+prop_evaluate_or =
+ forAll arbitrary $ \(f' :: Fun Int Bool) ->
+   let f = apply f'
+    in withDefaultOrder $ \(_ :: Proxy o) ->
+         forAll arbitrary $ \(a :: BDD o, b) ->
+           BDD.evaluate f (a BDD..||. b) === (BDD.evaluate f a || BDD.evaluate f b)
 
 -- ------------------------------------------------------------------------
 
