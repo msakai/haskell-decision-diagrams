@@ -46,12 +46,13 @@ module Data.DecisionDiagram.BDD
   , andB
   , orB
 
+  -- * Query
+  , support
+  , evaluate
+
   -- * Fold
   , fold
   , fold'
-
-  -- * Evaluation
-  , evaluate
   ) where
 
 import Control.Monad
@@ -60,6 +61,8 @@ import qualified Data.Foldable as Foldable
 import Data.Hashable
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
 import Data.Proxy
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
@@ -221,6 +224,12 @@ fold' !ff !tt br bdd = runST $ do
   f bdd
 
 -- ------------------------------------------------------------------------
+
+-- | All the variables that this BDD depends on.
+support :: BDD a -> IntSet
+support = fold' IntSet.empty IntSet.empty f
+  where
+    f x lo hi = IntSet.insert x (lo `IntSet.union` hi)
 
 -- | Evaluate a boolean function represented as BDD under the valuation
 -- given by @(Int -> Bool)@, i.e. it lifts a valuation function from

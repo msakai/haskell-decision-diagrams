@@ -9,6 +9,7 @@ import Data.List
 import Data.Proxy
 import Test.QuickCheck.Function (apply)
 import Test.Tasty
+import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import Test.Tasty.TH
 
@@ -196,6 +197,43 @@ prop_de_morgan_2 =
   withDefaultOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(a :: BDD o, b) ->
       BDD.notB (a BDD..&&. b) === (BDD.notB a BDD..||. BDD.notB b)
+
+-- ------------------------------------------------------------------------
+
+case_support_false :: Assertion
+case_support_false = BDD.support BDD.false @?= IntSet.empty
+
+case_support_true :: Assertion
+case_support_true = BDD.support BDD.true @?= IntSet.empty
+
+prop_support_var :: Property
+prop_support_var =
+  forAll arbitrary $ \x ->
+    BDD.support (BDD.var x) === IntSet.singleton x
+
+prop_support_not :: Property
+prop_support_not =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      let lhs = BDD.support a
+          rhs = BDD.support (BDD.notB a)
+       in lhs === rhs
+
+prop_support_and :: Property
+prop_support_and =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b) ->
+      let lhs = BDD.support (a BDD..&&. b)
+          rhs = BDD.support a `IntSet.union` BDD.support b
+       in counterexample (show (lhs, rhs)) $ lhs `IntSet.isSubsetOf` rhs
+
+prop_support_or :: Property
+prop_support_or =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b) ->
+      let lhs = BDD.support (a BDD..||. b)
+          rhs = BDD.support a `IntSet.union` BDD.support b
+       in counterexample (show (lhs, rhs)) $ lhs `IntSet.isSubsetOf` rhs
 
 -- ------------------------------------------------------------------------
 
