@@ -4,6 +4,7 @@
 module TestBDD (bddTestGroup) where
 
 import Control.Monad
+import qualified Data.IntMap as IntMap
 import qualified Data.IntSet as IntSet
 import Data.List
 import Data.Proxy
@@ -329,6 +330,60 @@ prop_restrict_support =
          in counterexample (show b) $
             counterexample (show xs) $
               x `IntSet.notMember` xs
+
+-- ------------------------------------------------------------------------
+
+prop_restrictSet_empty :: Property
+prop_restrictSet_empty =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      BDD.restrictSet IntMap.empty a === a
+
+prop_restrictSet_singleton :: Property
+prop_restrictSet_singleton =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \(x, val) ->
+        BDD.restrict x val a === BDD.restrictSet (IntMap.singleton x val) a
+
+prop_restrictSet_union :: Property
+prop_restrictSet_union =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \(val1, val2) ->
+        and (IntMap.intersectionWith (==) val1 val2)
+        ==>
+        (BDD.restrictSet val2 (BDD.restrictSet val1 a) === BDD.restrictSet (val1 `IntMap.union` val2) a)
+
+prop_restrictSet_idempotent :: Property
+prop_restrictSet_idempotent =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \val ->
+        let b = BDD.restrictSet val a
+            c = BDD.restrictSet val b
+         in counterexample (show (b, c)) $ b === c
+
+prop_restrictSet_not :: Property
+prop_restrictSet_not =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \val ->
+        BDD.restrictSet val (BDD.notB a) === BDD.notB (BDD.restrictSet val a)
+
+prop_restrictSet_and :: Property
+prop_restrictSet_and =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b) ->
+      forAll arbitrary $ \val ->
+        BDD.restrictSet val (a BDD..&&. b) === (BDD.restrictSet val a BDD..&&. BDD.restrictSet val b)
+
+prop_restrictSet_or :: Property
+prop_restrictSet_or =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b) ->
+      forAll arbitrary $ \val ->
+        BDD.restrictSet val (a BDD..||. b) === (BDD.restrictSet val a BDD..||. BDD.restrictSet val b)
 
 -- ------------------------------------------------------------------------
 

@@ -52,6 +52,7 @@ module Data.DecisionDiagram.BDD
 
   -- * Restriction
   , restrict
+  , restrictSet
 
   -- * Fold
   , fold
@@ -61,11 +62,15 @@ module Data.DecisionDiagram.BDD
 import Control.Monad
 import Control.Monad.ST
 import qualified Data.Foldable as Foldable
+import Data.Function (on)
 import Data.Hashable
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
+import Data.List (sortBy)
 import Data.Proxy
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
@@ -266,6 +271,26 @@ restrict x val bdd = runST $ do
             H.insert h n ret
             return ret
   f bdd
+
+-- | Compute \(F_{\{x_i = v_i\}_i} \).
+restrictSet :: forall a. ItemOrder a => IntMap Bool -> BDD a -> BDD a
+restrictSet val bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f [] n = return n
+      f _ T = return T
+      f _ F = return F
+      f xxs@((x,v) : xs) n@(Branch ind lo hi) = do
+        m <- H.lookup h n
+        case m of
+          Just y -> return y
+          Nothing -> do
+            ret <- case compareItem (Proxy :: Proxy a) ind x of
+              GT -> f xs n
+              LT -> liftM2 (Branch ind) (f xxs lo) (f xxs hi)
+              EQ -> if v then f xs hi else f xs lo
+            H.insert h n ret
+            return ret
+  f (sortBy (compareItem (Proxy :: Proxy a) `on` fst) (IntMap.toList val)) bdd
 
 -- ------------------------------------------------------------------------
 
