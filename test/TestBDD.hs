@@ -387,5 +387,83 @@ prop_restrictSet_or =
 
 -- ------------------------------------------------------------------------
 
+prop_restrictLaw_true :: Property
+prop_restrictLaw_true =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      BDD.restrictLaw BDD.true a === a
+
+prop_restrictLaw_self :: Property
+prop_restrictLaw_self =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      (a /= BDD.false) ==> BDD.restrictLaw a a === BDD.true
+
+prop_restrictLaw_not_self :: Property
+prop_restrictLaw_not_self =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      (a /= BDD.true) ==> BDD.restrictLaw (BDD.notB a) a === BDD.false
+
+prop_restrictLaw_restrictSet :: Property
+prop_restrictLaw_restrictSet =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \val ->
+        let b = BDD.andB [if v then BDD.var x else BDD.notB (BDD.var x) | (x,v) <- IntMap.toList val]
+         in BDD.restrictLaw b a === BDD.restrictSet val a
+
+prop_restrictLaw_and_condition :: Property
+prop_restrictLaw_and_condition =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \(val1, val2) ->
+        let val = val1 BDD..&&. val2
+         in counterexample (show val) $
+              (val /= BDD.false)
+              ==>
+              (BDD.restrictLaw val a === BDD.restrictLaw val2 (BDD.restrictLaw val1 a))
+
+prop_restrictLaw_or_condition :: Property
+prop_restrictLaw_or_condition =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \(val1, val2) ->
+        let val = val1 BDD..||. val2
+         in counterexample (show val) $
+              (val BDD..&&. BDD.restrictLaw val a) === (val1 BDD..&&. BDD.restrictLaw val1 a BDD..||. val2 BDD..&&. BDD.restrictLaw val2 a)
+
+prop_restrictLaw_idempotent :: Property
+prop_restrictLaw_idempotent =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \val ->
+        let b = BDD.restrictLaw val a
+            c = BDD.restrictLaw val b
+         in counterexample (show (b, c)) $ b === c
+
+prop_restrictLaw_not :: Property
+prop_restrictLaw_not =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll (arbitrary `suchThat` (/= BDD.false)) $ \val ->
+        BDD.restrictLaw val (BDD.notB a) === BDD.notB (BDD.restrictLaw val a)
+
+prop_restrictLaw_and :: Property
+prop_restrictLaw_and =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b) ->
+      forAll (arbitrary `suchThat` (/= BDD.false)) $ \val ->
+        BDD.restrictLaw val (a BDD..&&. b) === (BDD.restrictLaw val a BDD..&&. BDD.restrictLaw val b)
+
+prop_restrictLaw_or :: Property
+prop_restrictLaw_or =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b) ->
+      forAll (arbitrary `suchThat` (/= BDD.false)) $ \val ->
+        BDD.restrictLaw val (a BDD..||. b) === (BDD.restrictLaw val a BDD..||. BDD.restrictLaw val b)
+
+-- ------------------------------------------------------------------------
+
 bddTestGroup :: TestTree
 bddTestGroup = $(testGroupGenerator)

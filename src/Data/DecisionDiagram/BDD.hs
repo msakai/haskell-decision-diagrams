@@ -50,9 +50,10 @@ module Data.DecisionDiagram.BDD
   , support
   , evaluate
 
-  -- * Restriction
+  -- * Restriction / Cofactor
   , restrict
   , restrictSet
+  , restrictLaw
 
   -- * Fold
   , fold
@@ -107,6 +108,23 @@ pattern Branch x lo hi <- BDD (Node.Branch x (BDD -> lo) (BDD -> hi)) where
 
 nodeId :: BDD a -> Int
 nodeId (BDD node) = Node.nodeId node
+
+data BDDCase2 a
+  = BDDCase2LT Int (BDD a) (BDD a)
+  | BDDCase2GT Int (BDD a) (BDD a)
+  | BDDCase2EQ Int (BDD a) (BDD a) (BDD a) (BDD a)
+
+bddCase2 :: forall a. ItemOrder a => Proxy a -> BDD a -> BDD a -> BDDCase2 a
+bddCase2 _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
+  case compareItem (Proxy :: Proxy a) ptop qtop of
+    LT -> BDDCase2LT ptop p0 p1
+    GT -> BDDCase2GT qtop q0 q1
+    EQ -> BDDCase2EQ ptop p0 p1 q0 q1
+bddCase2 _ (Branch ptop p0 p1) _ = BDDCase2LT ptop p0 p1
+bddCase2 _ _ (Branch qtop q0 q1) = BDDCase2GT qtop q0 q1
+bddCase2 _ _ _ = error "should not happen"
+
+-- ------------------------------------------------------------------------
 
 -- | True
 true :: BDD a
@@ -291,6 +309,36 @@ restrictSet val bdd = runST $ do
             H.insert h n ret
             return ret
   f (sortBy (compareItem (Proxy :: Proxy a) `on` fst) (IntMap.toList val)) bdd
+
+-- | Compute generalized cofactor of F with respect to C.
+--
+-- Note that C is the first argument.
+restrictLaw :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
+restrictLaw law bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f T n = return n
+      f F _ = return T  -- Is this correct?
+      f _ F = return F
+      f _ T = return T
+      f n1 n2 | n1 == n2 = return T
+      f n1 n2 = do
+        m <- H.lookup h (n1, n2)
+        case m of
+          Just y -> return y
+          Nothing -> do
+            ret <- case bddCase2 (Proxy :: Proxy a) n1 n2 of
+              BDDCase2GT x2 lo2 hi2 -> liftM2 (Branch x2) (f n1 lo2) (f n1 hi2)
+              BDDCase2EQ x1 lo1 hi1 lo2 hi2
+                | lo1 == F  -> f hi1 hi2
+                | hi1 == F  -> f lo1 lo2
+                | otherwise -> liftM2 (Branch x1) (f lo1 lo2) (f hi1 hi2)
+              BDDCase2LT x1 lo1 hi1
+                | lo1 == F  -> f hi1 n2
+                | hi1 == F  -> f lo1 n2
+                | otherwise -> liftM2 (Branch x1) (f lo1 n2) (f hi1 n2)
+            H.insert h (n1, n2) ret
+            return ret
+  f law bdd
 
 -- ------------------------------------------------------------------------
 
