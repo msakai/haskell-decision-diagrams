@@ -465,5 +465,47 @@ prop_restrictLaw_or =
 
 -- ------------------------------------------------------------------------
 
+prop_subst_restrict_constant :: Property
+prop_subst_restrict_constant =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(m :: BDD o) ->
+    forAll arbitrary $ \x ->
+    forAll arbitrary $ \val ->
+      BDD.subst x (if val then BDD.true else BDD.false) m === BDD.restrict x val m
+
+prop_subst_restrict :: Property
+prop_subst_restrict =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(m :: BDD o) ->
+    forAll arbitrary $ \x ->
+    forAll arbitrary $ \(n :: BDD o) ->
+      BDD.subst x n m === ((n BDD..&&. BDD.restrict x True m) BDD..||. (BDD.notB n BDD..&&. BDD.restrict x False m))
+
+prop_subst_same_var :: Property
+prop_subst_same_var =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(m :: BDD o) ->
+    forAll arbitrary $ \x ->
+      BDD.subst x (BDD.var x) m === m
+
+prop_subst_not_occured :: Property
+prop_subst_not_occured =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(m :: BDD o) ->
+    forAll (arbitrary `suchThat` (\x -> x `IntSet.notMember` (BDD.support m))) $ \x ->
+    forAll arbitrary $ \(n :: BDD o) ->
+      BDD.subst x n m === m
+
+-- If x1≠x2 and x1∉FV(M2) then M[x1 ↦ M1][x2 ↦ M2] = M[x2 ↦ M2][x1 ↦ M1[x2 ↦ M2]].
+prop_subst_dist :: Property
+prop_subst_dist =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(x1, m1) ->
+    forAll ((,) <$> (arbitrary `suchThat` (/= x1)) <*> (arbitrary `suchThat` (\m2 -> x1 `IntSet.notMember` BDD.support m2))) $ \(x2, m2) ->
+    forAll arbitrary $ \(m :: BDD o) ->
+      BDD.subst x2 m2 (BDD.subst x1 m1 m) === BDD.subst x1 (BDD.subst x2 m2 m1) (BDD.subst x2 m2 m)
+
+-- ------------------------------------------------------------------------
+
 bddTestGroup :: TestTree
 bddTestGroup = $(testGroupGenerator)

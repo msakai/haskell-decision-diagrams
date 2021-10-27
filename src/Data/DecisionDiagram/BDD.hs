@@ -55,6 +55,9 @@ module Data.DecisionDiagram.BDD
   , restrictSet
   , restrictLaw
 
+  -- * Substition / Composition
+  , subst
+
   -- * Fold
   , fold
   , fold'
@@ -344,6 +347,45 @@ restrictLaw law bdd = runST $ do
             H.insert h (n1, n2) ret
             return ret
   f law bdd
+
+-- ------------------------------------------------------------------------
+
+-- | @subst x N M@ computes substitution \(M_{x = N}\).
+--
+-- This operation is also known as /Composition/.
+subst :: forall a. ItemOrder a => Int -> BDD a -> BDD a -> BDD a
+subst x n m = runST $ do
+  h <- C.newSized defaultTableSize
+  let f (Branch x' lo _) mhi n2 | x==x' = f lo mhi n2
+      f mlo (Branch x' _ hi) n2 | x==x' = f mlo hi n2
+      f mlo _ F = return $ restrict x False mlo
+      f _ mhi T = return $ restrict x True mhi
+      f mlo mhi n2 = do
+        u <- H.lookup h (mlo, mhi, n2)
+        case u of
+          Just y -> return y
+          Nothing -> do
+            case minimum (map level [mlo, mhi, n2]) of
+              Terminal -> error "should not happen"
+              NonTerminal x' -> do
+                let (mll, mlh) =
+                      case mlo of
+                        Branch x'' mll' mlh' | x' == x'' -> (mll', mlh')
+                        _ -> (mlo, mlo)
+                    (mhl, mhh) =
+                      case mhi of
+                        Branch x'' mhl' mhh' | x' == x'' -> (mhl', mhh')
+                        _ -> (mhi, mhi)
+                    (n2l, n2h) =
+                      case n2 of
+                        Branch x'' n2l' n2h' | x' == x'' -> (n2l', n2h')
+                        _ -> (n2, n2)
+                r0 <- f mll mhl n2l
+                r1 <- f mlh mhh n2h
+                let ret = Branch x' r0 r1
+                H.insert h (mlo, mhi, n2) ret
+                return ret
+  f m m n
 
 -- ------------------------------------------------------------------------
 
