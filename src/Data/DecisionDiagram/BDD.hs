@@ -124,6 +124,11 @@ bddCase2 _ (Branch ptop p0 p1) _ = BDDCase2LT ptop p0 p1
 bddCase2 _ _ (Branch qtop q0 q1) = BDDCase2GT qtop q0 q1
 bddCase2 _ _ _ = error "should not happen"
 
+level :: BDD a -> Level a
+level T = Terminal
+level F = Terminal
+level (Branch x _ _) = NonTerminal x
+
 -- ------------------------------------------------------------------------
 
 -- | True

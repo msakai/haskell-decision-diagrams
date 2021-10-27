@@ -21,6 +21,9 @@ module Data.DecisionDiagram.BDD.Internal.ItemOrder
   , DefaultOrder
   , withDefaultOrder
   , withCustomOrder
+
+  -- * Level
+  , Level (..)
   ) where
 
 import Data.Proxy
@@ -46,5 +49,18 @@ withDefaultOrder k = k (Proxy :: Proxy DefaultOrder)
 
 withCustomOrder :: forall r. (Int -> Int -> Ordering) -> (forall a. ItemOrder a => Proxy a -> r) -> r
 withCustomOrder cmp k = reify cmp (\(_ :: Proxy s) -> k (Proxy :: Proxy (CustomOrder s)))
+
+-- ------------------------------------------------------------------------
+
+data Level a
+  = NonTerminal !Int
+  | Terminal
+  deriving (Eq, Show)
+
+instance ItemOrder a => Ord (Level a) where
+  compare (NonTerminal x) (NonTerminal y) = compareItem (Proxy :: Proxy a) x y
+  compare (NonTerminal _) Terminal = LT
+  compare Terminal (NonTerminal _) = GT
+  compare Terminal Terminal = EQ
 
 -- ------------------------------------------------------------------------
