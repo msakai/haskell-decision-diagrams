@@ -523,5 +523,66 @@ prop_subst_dist =
 
 -- ------------------------------------------------------------------------
 
+prop_substSet_empty :: Property
+prop_substSet_empty =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(m :: BDD o) ->
+      BDD.substSet IntMap.empty m === m
+
+prop_substSet_singleton :: Property
+prop_substSet_singleton =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(m :: BDD o) ->
+    forAll arbitrary $ \x ->
+    forAll arbitrary $ \m1 ->
+      BDD.substSet (IntMap.singleton x m1) m === BDD.subst x m1 m
+
+case_substSet_case_1 :: Assertion
+case_substSet_case_1 = do
+  BDD.substSet (IntMap.singleton x m1) m @?= BDD.subst x m1 m
+  where
+    m :: BDD BDD.DefaultOrder
+    m = BDD.Branch 1 (BDD.Branch 2 BDD.T BDD.F) (BDD.Branch 2 BDD.F BDD.F)
+    x = 1
+    m1 = BDD.Branch 1 BDD.T BDD.F
+
+prop_substSet_same_vars :: Property
+prop_substSet_same_vars =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(m :: BDD o) ->
+    forAll arbitrary $ \xs ->
+      BDD.substSet (IntMap.fromAscList [(x, BDD.var x) | x <- IntSet.toAscList xs]) m === m
+
+prop_substSet_not_occured :: Property
+prop_substSet_not_occured =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(m :: BDD o) ->
+    forAll (f (BDD.support m)) $ \s ->
+      BDD.substSet s m === m
+  where
+    f xs = liftM IntMap.fromList $ listOf $ do
+      y <- arbitrary `suchThat` (`IntSet.notMember` xs)
+      m <- arbitrary
+      return (y, m)
+
+prop_substSet_compose :: Property
+prop_substSet_compose =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll (liftM IntSet.fromList arbitrary) $ \xs ->
+    forAll (liftM IntSet.fromList arbitrary) $ \ys ->
+    forAll (liftM IntMap.fromList $ mapM (\x -> (,) <$> pure x <*> arbitraryBDDOver ys) (IntSet.toList xs)) $ \s1 ->
+    forAll (liftM IntMap.fromList $ mapM (\y -> (,) <$> pure y <*> arbitrary) (IntSet.toList ys)) $ \s2 ->
+    forAll (arbitraryBDDOver xs) $ \(m :: BDD o) ->
+      BDD.substSet s2 (BDD.substSet s1 m) === BDD.substSet (IntMap.map (BDD.substSet s2) s1) m
+
+case_substSet_case_2 :: Assertion
+case_substSet_case_2 = do
+  let m :: BDD BDD.DefaultOrder
+      m = BDD.var 1 BDD..&&. BDD.var 2
+  BDD.substSet (IntMap.fromList [(1, BDD.var 2), (2, BDD.var 3)]) m @?= BDD.var 2 BDD..&&. BDD.var 3
+  BDD.substSet (IntMap.fromList [(1, BDD.var 3), (2, BDD.var 1)]) m @?= BDD.var 3 BDD..&&. BDD.var 1
+
+-- ------------------------------------------------------------------------
+
 bddTestGroup :: TestTree
 bddTestGroup = $(testGroupGenerator)

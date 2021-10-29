@@ -57,12 +57,14 @@ module Data.DecisionDiagram.BDD
 
   -- * Substition / Composition
   , subst
+  , substSet
 
   -- * Fold
   , fold
   , fold'
   ) where
 
+import Control.Exception (assert)
 import Control.Monad
 import Control.Monad.ST
 import qualified Data.Foldable as Foldable
@@ -386,6 +388,70 @@ subst x n m = runST $ do
                 H.insert h (mlo, mhi, n2) ret
                 return ret
   f m m n
+
+-- | Simultaneous substitution
+substSet :: forall a. ItemOrder a => IntMap (BDD a) -> BDD a -> BDD a
+substSet s m = runST $ do
+  h <- C.newSized defaultTableSize
+  let -- f :: IntMap (BDD a) -> [(IntMap Bool, BDD a)] -> IntMap (BDD a) -> ST _ (BDD a)
+      f conditions conditioned _ | assert (length conditioned >= 1 && all (\(cond, _) -> IntMap.keysSet cond `IntSet.isSubsetOf` IntMap.keysSet conditions) conditioned) False = undefined
+      f conditions conditioned remaining = do
+        let l1 = minimum $ map (level . snd) conditioned
+            -- remaining' = IntMap.filterWithKey (\x _ -> l1 <= NonTerminal x) remaining
+            remaining' = IntMap.restrictKeys remaining (IntSet.unions [support a | (_, a) <- conditioned])
+            l = minimum $ l1 : map level (IntMap.elems remaining' ++ IntMap.elems conditions)
+        assert (all (\c -> NonTerminal c <= l) (IntMap.keys conditions)) $ return ()
+        case l of
+          Terminal -> do
+            case propagateFixed conditions conditioned of
+              (conditions', conditioned') ->
+                assert (IntMap.null conditions' && length conditioned' == 1) $
+                  return (snd (head conditioned'))
+          NonTerminal x
+            | l == l1 && x `IntMap.member` remaining' -> do
+                let conditions' = IntMap.insert x (remaining' IntMap.! x) conditions
+                    conditioned' = do
+                      (cond, a) <- conditioned
+                      case a of
+                        Branch x' lo hi | x == x' -> [(IntMap.insert x False cond, lo), (IntMap.insert x True cond, hi)]
+                        _ -> [(cond, a)]
+                f conditions' conditioned' (IntMap.delete x remaining')
+            | otherwise -> do
+                case propagateFixed conditions conditioned of
+                  (conditions', conditioned') -> do
+                    let key = (IntMap.toList conditions', [(IntMap.toList cond, a) | (cond, a) <- conditioned'], IntMap.toList remaining')  -- キーを減らせる?
+                    u <- H.lookup h key
+                    case u of
+                      Just y -> return y
+                      Nothing -> do
+                        let f0 (Branch x' lo _) | x == x' = lo
+                            f0 a = a
+                            f1 (Branch x' _ hi) | x == x' = hi
+                            f1 a = a
+                        r0 <- f (IntMap.map f0 conditions') [(cond, f0 a) | (cond, a) <- conditioned'] (IntMap.map f0 remaining')
+                        r1 <- f (IntMap.map f1 conditions') [(cond, f1 a) | (cond, a) <- conditioned'] (IntMap.map f1 remaining')
+                        let ret = Branch x r0 r1
+                        H.insert h key ret
+                        return ret
+  f IntMap.empty [(IntMap.empty, m)] s
+
+  where
+    propagateFixed :: IntMap (BDD a) -> [(IntMap Bool, BDD a)] -> (IntMap (BDD a), [(IntMap Bool, BDD a)])
+    propagateFixed conditions conditioned
+      | IntMap.null fixed = (conditions, conditioned)
+      | otherwise =
+          ( IntMap.difference conditions fixed
+          , [(IntMap.difference cond fixed, a) | (cond, a) <- conditioned, and $ IntMap.intersectionWith (==) fixed cond]
+          )
+      where
+        fixed = IntMap.mapMaybe asBool conditions
+
+    asBool :: BDD a -> Maybe Bool
+    asBool a =
+      case a of
+        T -> Just True
+        F -> Just False
+        _ -> Nothing
 
 -- ------------------------------------------------------------------------
 
