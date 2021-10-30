@@ -413,16 +413,29 @@ prop_restrictLaw_restrictSet =
         let b = BDD.andB [if v then BDD.var x else BDD.notB (BDD.var x) | (x,v) <- IntMap.toList val]
          in BDD.restrictLaw b a === BDD.restrictSet val a
 
-prop_restrictLaw_and_condition :: Property
-prop_restrictLaw_and_condition =
-  withDefaultOrder $ \(_ :: Proxy o) ->
-    forAll arbitrary $ \(a :: BDD o) ->
-      forAll arbitrary $ \(val1, val2) ->
-        let val = val1 BDD..&&. val2
-         in counterexample (show val) $
-              (val /= BDD.false)
-              ==>
-              (BDD.restrictLaw val a === BDD.restrictLaw val2 (BDD.restrictLaw val1 a))
+-- prop_restrictLaw_and_condition :: Property
+-- prop_restrictLaw_and_condition =
+--   withDefaultOrder $ \(_ :: Proxy o) ->
+--     forAll arbitrary $ \(a :: BDD o) ->
+--       forAll arbitrary $ \(val1, val2) ->
+--         let val = val1 BDD..&&. val2
+--          in counterexample (show val) $
+--               (val /= BDD.false)
+--               ==>
+--               (BDD.restrictLaw val a === BDD.restrictLaw val2 (BDD.restrictLaw val1 a))
+
+-- counterexample to above prop_restrictLaw_and_condition
+case_restrictLaw_case_1 :: Assertion
+case_restrictLaw_case_1 = do
+  -- BDD.restrictLaw val a @?= BDD.restrictLaw val2 (BDD.restrictLaw val1 a)
+  BDD.restrictLaw val a @?= BDD.Branch 2 BDD.F BDD.T
+  BDD.restrictLaw val2 (BDD.restrictLaw val1 a) @?= BDD.Branch 1 BDD.T (Branch 2 BDD.F BDD.T)
+  where
+    a :: BDD BDD.DefaultOrder
+    a = Branch 2 BDD.F BDD.T -- x2
+    val1 = BDD.Branch 1 BDD.F BDD.T -- x1
+    val2 = BDD.Branch 1 (BDD.Branch 2 BDD.F BDD.T) BDD.T -- x1 ∨ x2
+    val = val1 BDD..&&. val2 -- x1
 
 prop_restrictLaw_or_condition :: Property
 prop_restrictLaw_or_condition =
