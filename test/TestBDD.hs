@@ -5,6 +5,7 @@ module TestBDD (bddTestGroup) where
 
 import Control.Monad
 import qualified Data.IntMap as IntMap
+import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List
 import Data.Proxy
@@ -20,21 +21,7 @@ import qualified Data.DecisionDiagram.BDD as BDD
 -- ------------------------------------------------------------------------
 
 instance BDD.ItemOrder a => Arbitrary (BDD a) where
-  arbitrary = do
-    vars <- liftM (sortBy (BDD.compareItem (Proxy :: Proxy a)) . IntSet.toList . IntSet.fromList) arbitrary
-    let f vs n = oneof $
-          [ return BDD.true
-          , return BDD.false
-          ]
-          ++
-          [ do v <- elements vs
-               let vs' = dropWhile (\v' -> compareItem (Proxy :: Proxy a) v' v  /= GT) vs
-               lo <- f vs' (n `div` 2)
-               hi <- f vs' (n `div` 2) `suchThat` (/= lo)
-               return (BDD.Branch v lo hi)
-          | n > 0, not (null vs)
-          ]
-    sized (f vars)
+  arbitrary = arbitraryBDDOver =<< liftM IntSet.fromList arbitrary
 
   shrink (BDD.F) = []
   shrink (BDD.T) = []
@@ -44,6 +31,22 @@ instance BDD.ItemOrder a => Arbitrary (BDD a) where
     [ BDD.Branch x p0' p1'
     | (p0', p1') <- shrink (p0, p1), p0' /= p1'
     ]
+
+arbitraryBDDOver :: forall a. BDD.ItemOrder a => IntSet -> Gen (BDD a)
+arbitraryBDDOver xs = do
+  let f vs n = oneof $
+        [ return BDD.true
+        , return BDD.false
+        ]
+        ++
+        [ do v <- elements vs
+             let vs' = dropWhile (\v' -> compareItem (Proxy :: Proxy a) v' v  /= GT) vs
+             lo <- f vs' (n `div` 2)
+             hi <- f vs' (n `div` 2) `suchThat` (/= lo)
+             return (BDD.Branch v lo hi)
+        | n > 0, not (null vs)
+        ]
+  sized $ f (sortBy (BDD.compareItem (Proxy :: Proxy a)) $ IntSet.toList xs)
 
 -- ------------------------------------------------------------------------
 -- conjunction
