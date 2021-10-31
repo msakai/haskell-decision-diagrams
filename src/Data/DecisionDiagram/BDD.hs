@@ -168,51 +168,46 @@ notB bdd = runST $ do
             return ret
   f bdd
 
--- | Conjunction of two boolean function
-(.&&.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-bdd1 .&&. bdd2 = runST $ do
+apply' :: forall a. ItemOrder a => Bool -> (BDD a -> BDD a -> Maybe (BDD a)) -> BDD a -> BDD a -> BDD a
+apply' isCommutative func bdd1 bdd2 = runST $ do
   h <- C.newSized defaultTableSize
-  let f T b = return b
-      f F _ = return F
-      f a T = return a
-      f _ F = return F
-      f a b | a == b = return a
-      f n1@(Branch ind1 lo1 hi1) n2@(Branch ind2 lo2 hi2) = do
-        let key = if nodeId n1 <= nodeId n2 then (n1, n2) else (n2, n1)
+  let f a b | Just c <- func a b = return c
+      f n1 n2 = do
+        let key = if isCommutative && nodeId n2 < nodeId n1 then (n2, n1) else (n1, n2)
         m <- H.lookup h key
         case m of
           Just y -> return y
           Nothing -> do
-            ret <- case compareItem (Proxy :: Proxy a) ind1 ind2 of
-              EQ -> liftM2 (Branch ind1) (f lo1 lo2) (f hi1 hi2)
-              LT -> liftM2 (Branch ind1) (f lo1 n2) (f hi1 n2)
-              GT -> liftM2 (Branch ind2) (f n1 lo2) (f n1 hi2)
+            ret <- case bddCase2 (Proxy :: Proxy a) n1 n2 of
+              BDDCase2GT x2 lo2 hi2 -> liftM2 (Branch x2) (f n1 lo2) (f n1 hi2)
+              BDDCase2LT x1 lo1 hi1 -> liftM2 (Branch x1) (f lo1 n2) (f hi1 n2)
+              BDDCase2EQ x lo1 hi1 lo2 hi2 -> liftM2 (Branch x) (f lo1 lo2) (f hi1 hi2)
+              BDDCase2EQ2 _ _ -> error "apply': should not happen"
             H.insert h key ret
             return ret
   f bdd1 bdd2
 
+-- | Conjunction of two boolean function
+(.&&.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
+(.&&.) = apply' True f
+  where
+    f T b = Just b
+    f F _ = Just F
+    f a T = Just a
+    f _ F = Just F
+    f a b | a == b = Just a
+    f _ _ = Nothing
+
 -- | Disjunction of two boolean function
 (.||.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-bdd1 .||. bdd2 = runST $ do
-  h <- C.newSized defaultTableSize
-  let f T _ = return T
-      f F b = return b
-      f _ T = return T
-      f a F = return a
-      f a b | a == b = return a
-      f n1@(Branch ind1 lo1 hi1) n2@(Branch ind2 lo2 hi2) = do
-        let key = if nodeId n1 <= nodeId n2 then (n1, n2) else (n2, n1)
-        m <- H.lookup h key
-        case m of
-          Just y -> return y
-          Nothing -> do
-            ret <- case compareItem (Proxy :: Proxy a) ind1 ind2 of
-              EQ -> liftM2 (Branch ind1) (f lo1 lo2) (f hi1 hi2)
-              LT -> liftM2 (Branch ind1) (f lo1 n2) (f hi1 n2)
-              GT -> liftM2 (Branch ind2) (f n1 lo2) (f n1 hi2)
-            H.insert h key ret
-            return ret
-  f bdd1 bdd2
+(.||.) = apply' True f
+  where
+    f T _ = Just T
+    f F b = Just b
+    f _ T = Just T
+    f a F = Just a
+    f a b | a == b = Just a
+    f _ _ = Nothing
 
 -- | Conjunction of a list of BDDs.
 andB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a
