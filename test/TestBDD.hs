@@ -141,6 +141,46 @@ prop_or_idempotent =
       (a BDD..||. a) === a
 
 -- ------------------------------------------------------------------------
+-- xor
+-- ------------------------------------------------------------------------
+
+prop_xor_unitL :: Property
+prop_xor_unitL =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      (BDD.false `BDD.xor` a) === a
+
+prop_xor_unitR :: Property
+prop_xor_unitR =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      (a `BDD.xor` BDD.false) === a
+
+prop_xor_comm :: Property
+prop_xor_comm =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b) ->
+      (a `BDD.xor` b) === (b `BDD.xor` a)
+
+prop_xor_assoc :: Property
+prop_xor_assoc =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b, c) ->
+      (a `BDD.xor` (b `BDD.xor` c)) === ((a `BDD.xor` b) `BDD.xor` c)
+
+prop_xor_involution :: Property
+prop_xor_involution =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      (a `BDD.xor` a) === BDD.false
+
+prop_xor_dist :: Property
+prop_xor_dist =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b, c) ->
+      (a BDD..&&. (b `BDD.xor` c)) === ((a BDD..&&. b) `BDD.xor` (a BDD..&&. c))
+
+-- ------------------------------------------------------------------------
 -- distributivity
 -- ------------------------------------------------------------------------
 

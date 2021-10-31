@@ -43,6 +43,7 @@ module Data.DecisionDiagram.BDD
   , notB
   , (.&&.)
   , (.||.)
+  , xor
   , andB
   , orB
 
@@ -207,6 +208,15 @@ apply' isCommutative func bdd1 bdd2 = runST $ do
     f _ T = Just T
     f a F = Just a
     f a b | a == b = Just a
+    f _ _ = Nothing
+
+-- | XOR
+xor :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
+xor = apply' True f
+  where
+    f F b = Just b
+    f a F = Just a
+    f a b | a == b = Just F
     f _ _ = Nothing
 
 -- | Conjunction of a list of BDDs.
