@@ -46,6 +46,7 @@ module Data.DecisionDiagram.BDD
   , xor
   , (.=>.)
   , (.<=>.)
+  , ite
   , andB
   , orB
 
@@ -251,6 +252,30 @@ xor = apply' True f
     f F F = Just T
     f a b | a == b = Just T
     f _ _ = Nothing
+
+-- | If-then-else
+ite :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a -> BDD a
+ite c' t' e' = runST $ do
+  h <- C.newSized defaultTableSize
+  let f T t _ = return t
+      f F _ e = return e
+      f _ t e | t == e = return t
+      f c t e = do
+        case minimum [level c, level t, level e] of
+          Terminal -> error "should not happen"
+          NonTerminal x -> do
+            let key = (c, t, e)
+            m <- H.lookup h key
+            case m of
+              Just y -> return y
+              Nothing -> do
+                let (c0, c1) = case c of{ Branch x' lo hi | x' == x -> (lo, hi); _ -> (c, c) }
+                    (t0, t1) = case t of{ Branch x' lo hi | x' == x -> (lo, hi); _ -> (t, t) }
+                    (e0, e1) = case e of{ Branch x' lo hi | x' == x -> (lo, hi); _ -> (e, e) }
+                ret <- liftM2 (Branch x) (f c0 t0 e0) (f c1 t1 e1)
+                H.insert h key ret
+                return ret
+  f c' t' e'
 
 -- | Conjunction of a list of BDDs.
 andB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a

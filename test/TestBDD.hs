@@ -269,6 +269,40 @@ prop_equiv =
       (a BDD..<=>. b) === ((a BDD..=>. b) BDD..&&. (b BDD..=>. a))
 
 -- ------------------------------------------------------------------------
+-- If-then-else
+-- ------------------------------------------------------------------------
+
+prop_ite :: Property
+prop_ite =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(c :: BDD o, t, e) ->
+      BDD.ite c t e === ((c BDD..&&. t) BDD..||. (BDD.notB c BDD..&&. e))
+
+prop_ite_swap_branch :: Property
+prop_ite_swap_branch =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(c :: BDD o, t, e) ->
+      BDD.ite c t e === BDD.ite (BDD.notB c) e t
+
+prop_ite_dist_not :: Property
+prop_ite_dist_not =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(c :: BDD o, t, e) ->
+      BDD.notB (BDD.ite c t e) === BDD.ite c (BDD.notB t) (BDD.notB e)
+
+prop_ite_dist_and :: Property
+prop_ite_dist_and =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(c :: BDD o, t, e, d) ->
+      (d BDD..&&. BDD.ite c t e) === BDD.ite c (d BDD..&&. t) (d BDD..&&. e)
+
+prop_ite_dist_or :: Property
+prop_ite_dist_or =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(c :: BDD o, t, e, d) ->
+      (d BDD..||. BDD.ite c t e) === BDD.ite c (d BDD..||. t) (d BDD..||. e)
+
+-- ------------------------------------------------------------------------
 -- Quantification
 -- ------------------------------------------------------------------------
 
