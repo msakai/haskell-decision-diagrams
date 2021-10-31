@@ -293,6 +293,67 @@ prop_existsUnique_support =
 
 -- ------------------------------------------------------------------------
 
+prop_forAllSet_empty :: Property
+prop_forAllSet_empty =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      BDD.forAllSet IntSet.empty a === a
+
+prop_existsSet_empty :: Property
+prop_existsSet_empty =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      BDD.existsSet IntSet.empty a === a
+
+prop_existsUniqueSet_empty :: Property
+prop_existsUniqueSet_empty =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      BDD.existsUniqueSet IntSet.empty a === a
+
+prop_forAllSet_singleton :: Property
+prop_forAllSet_singleton =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(x, a :: BDD o) ->
+      BDD.forAllSet (IntSet.singleton x) a === BDD.forAll x a
+
+prop_existsSet_singleton :: Property
+prop_existsSet_singleton =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(x, a :: BDD o) ->
+      BDD.existsSet (IntSet.singleton x) a === BDD.exists x a
+
+prop_existsUniqueSet_singleton :: Property
+prop_existsUniqueSet_singleton =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(x, a :: BDD o) ->
+      BDD.existsUniqueSet (IntSet.singleton x) a === BDD.existsUnique x a
+
+prop_forAllSet_union :: Property
+prop_forAllSet_union =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(xs1, xs2, a :: BDD o) ->
+      BDD.forAllSet (xs1 `IntSet.union` xs2) a === BDD.forAllSet xs2 (BDD.forAllSet xs1 a)
+
+prop_existsSet_union :: Property
+prop_existsSet_union =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(xs1, xs2, a :: BDD o) ->
+      BDD.existsSet (xs1 `IntSet.union` xs2) a === BDD.existsSet xs2 (BDD.existsSet xs1 a)
+
+prop_existsUniqueSet_union :: Property
+prop_existsUniqueSet_union =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitraryDisjointSets $ \(xs1, xs2) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      BDD.existsUniqueSet (xs1 `IntSet.union` xs2) a === BDD.existsUniqueSet xs2 (BDD.existsUniqueSet xs1 a)
+  where
+    arbitraryDisjointSets = do
+      (u, v) <- arbitrary
+      return (u `IntSet.intersection` v, u IntSet.\\ v)
+
+-- ------------------------------------------------------------------------
+
 case_support_false :: Assertion
 case_support_false = BDD.support BDD.false @?= IntSet.empty
 

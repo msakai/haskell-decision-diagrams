@@ -51,6 +51,9 @@ module Data.DecisionDiagram.BDD
   , forAll
   , exists
   , existsUnique
+  , forAllSet
+  , existsSet
+  , existsUniqueSet
 
   -- * Query
   , support
@@ -285,6 +288,71 @@ existsUnique x bdd = runST $ do
             return ret
       f _ = return F
   f bdd
+
+-- | Universal quantification (∀) over a set of variables
+forAllSet :: forall a. ItemOrder a => IntSet -> BDD a -> BDD a
+forAllSet vars bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f xxs@(x : xs) n@(Branch ind lo hi) = do
+        m <- H.lookup h n
+        case m of
+          Just y -> return y
+          Nothing -> do
+            ret <- case compareItem (Proxy :: Proxy a) ind x of
+              LT -> liftM2 (Branch ind) (f xxs lo) (f xxs hi)
+              EQ -> do
+                r0 <- f xs lo
+                r1 <- f xs hi
+                return (r0 .&&. r1)
+              GT -> f xs n
+            H.insert h n ret
+            return ret
+      f _ a = return a
+  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList vars)) bdd
+
+-- | Existential quantification (∃) over a set of variables
+existsSet :: forall a. ItemOrder a => IntSet -> BDD a -> BDD a
+existsSet vars bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f xxs@(x : xs) n@(Branch ind lo hi) = do
+        m <- H.lookup h n
+        case m of
+          Just y -> return y
+          Nothing -> do
+            ret <- case compareItem (Proxy :: Proxy a) ind x of
+              LT -> liftM2 (Branch ind) (f xxs lo) (f xxs hi)
+              EQ -> do
+                r0 <- f xs lo
+                r1 <- f xs hi
+                return (r0 .||. r1)
+              GT -> f xs n
+            H.insert h n ret
+            return ret
+      f _ a = return a
+  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList vars)) bdd
+
+-- | Unique existential quantification (∃!) over a set of variables
+existsUniqueSet :: forall a. ItemOrder a => IntSet -> BDD a -> BDD a
+existsUniqueSet vars bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f xxs@(x : xs) n@(Branch ind lo hi) = do
+        let key = (xxs, n)
+        m <- H.lookup h key
+        case m of
+          Just y -> return y
+          Nothing -> do
+            ret <- case compareItem (Proxy :: Proxy a) ind x of
+              LT -> liftM2 (Branch ind) (f xxs lo) (f xxs hi)
+              EQ -> do
+                r0 <- f xs lo
+                r1 <- f xs hi
+                return (r0 `xor` r1)
+              GT -> return F
+            H.insert h key ret
+            return ret
+      f (_ : _) _ = return F
+      f [] a = return a
+  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList vars)) bdd
 
 -- ------------------------------------------------------------------------
 
