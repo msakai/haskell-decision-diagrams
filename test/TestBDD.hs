@@ -243,6 +243,32 @@ prop_de_morgan_2 =
       BDD.notB (a BDD..&&. b) === (BDD.notB a BDD..||. BDD.notB b)
 
 -- ------------------------------------------------------------------------
+-- Implication
+-- ------------------------------------------------------------------------
+
+prop_imply :: Property
+prop_imply =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b) ->
+      (a BDD..=>. b) === (BDD.notB a BDD..||. b)
+
+prop_imply_currying :: Property
+prop_imply_currying =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b, c) ->
+      ((a BDD..&&. b) BDD..=>. c) === (a BDD..=>. (b BDD..=>. c))
+
+-- ------------------------------------------------------------------------
+-- Equivalence
+-- ------------------------------------------------------------------------
+
+prop_equiv :: Property
+prop_equiv =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o, b) ->
+      (a BDD..<=>. b) === ((a BDD..=>. b) BDD..&&. (b BDD..=>. a))
+
+-- ------------------------------------------------------------------------
 -- Quantification
 -- ------------------------------------------------------------------------
 

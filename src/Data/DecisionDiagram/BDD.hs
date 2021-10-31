@@ -44,6 +44,8 @@ module Data.DecisionDiagram.BDD
   , (.&&.)
   , (.||.)
   , xor
+  , (.=>.)
+  , (.<=>.)
   , andB
   , orB
 
@@ -93,6 +95,8 @@ import qualified Data.DecisionDiagram.BDD.Internal.Node as Node
 
 infixr 3 .&&.
 infixr 2 .||.
+infixr 1 .=>.
+infix 1 .<=>.
 
 -- ------------------------------------------------------------------------
 
@@ -225,6 +229,27 @@ xor = apply' True f
     f F b = Just b
     f a F = Just a
     f a b | a == b = Just F
+    f _ _ = Nothing
+
+-- | Implication
+(.=>.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
+(.=>.) = apply' False f
+  where
+    f F _ = Just T
+    f T b = Just b
+    f _ T = Just T
+    f a b | a == b = Just T
+    f _ _ = Nothing
+
+-- | Equivalence
+(.<=>.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
+(.<=>.) = apply' True f
+  where
+    f T T = Just T
+    f T F = Just F
+    f F T = Just F
+    f F F = Just T
+    f a b | a == b = Just T
     f _ _ = Nothing
 
 -- | Conjunction of a list of BDDs.
