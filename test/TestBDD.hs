@@ -243,6 +243,55 @@ prop_de_morgan_2 =
       BDD.notB (a BDD..&&. b) === (BDD.notB a BDD..||. BDD.notB b)
 
 -- ------------------------------------------------------------------------
+-- Quantification
+-- ------------------------------------------------------------------------
+
+prop_forAll :: Property
+prop_forAll =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(x, a :: BDD o) ->
+      BDD.forAll x a === (BDD.restrict x True a BDD..&&. BDD.restrict x False a)
+
+prop_exists :: Property
+prop_exists =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(x, a :: BDD o) ->
+      BDD.exists x a === (BDD.restrict x True a BDD..||. BDD.restrict x False a)
+
+prop_existsUnique :: Property
+prop_existsUnique =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(x, a :: BDD o) ->
+      BDD.existsUnique x a === (BDD.restrict x True a `BDD.xor` BDD.restrict x False a)
+
+prop_forAll_support :: Property
+prop_forAll_support =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(x, a :: BDD o) ->
+      let b = BDD.forAll x a
+          xs = BDD.support b
+       in counterexample (show (b, xs)) $
+            x `IntSet.notMember` xs
+
+prop_exists_support :: Property
+prop_exists_support =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(x, a :: BDD o) ->
+      let b = BDD.exists x a
+          xs = BDD.support b
+       in counterexample (show (b, xs)) $
+            x `IntSet.notMember` xs
+
+prop_existsUnique_support :: Property
+prop_existsUnique_support =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(x, a :: BDD o) ->
+      let b = BDD.existsUnique x a
+          xs = BDD.support b
+       in counterexample (show (b, xs)) $
+            x `IntSet.notMember` xs
+
+-- ------------------------------------------------------------------------
 
 case_support_false :: Assertion
 case_support_false = BDD.support BDD.false @?= IntSet.empty

@@ -47,6 +47,11 @@ module Data.DecisionDiagram.BDD
   , andB
   , orB
 
+  -- * Quantification
+  , forAll
+  , exists
+  , existsUnique
+
   -- * Query
   , support
   , evaluate
@@ -226,6 +231,60 @@ andB xs = Foldable.foldl' (.&&.) true xs
 -- | Disjunction of a list of BDDs.
 orB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a
 orB xs = Foldable.foldl' (.||.) false xs
+
+-- ------------------------------------------------------------------------
+
+-- | Universal quantification (∀)
+forAll :: forall a. ItemOrder a => Int -> BDD a -> BDD a
+forAll x bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f n@(Branch ind lo hi) = do
+        m <- H.lookup h n
+        case m of
+          Just y -> return y
+          Nothing -> do
+            ret <- if ind == x
+                   then return $ lo .&&. hi
+                   else liftM2 (Branch ind) (f lo) (f hi)
+            H.insert h n ret
+            return ret
+      f a = return a
+  f bdd
+
+-- | Existential quantification (∃)
+exists :: forall a. ItemOrder a => Int -> BDD a -> BDD a
+exists x bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f n@(Branch ind lo hi) = do
+        m <- H.lookup h n
+        case m of
+          Just y -> return y
+          Nothing -> do
+            ret <- if ind == x
+                   then return $ lo .||. hi
+                   else liftM2 (Branch ind) (f lo) (f hi)
+            H.insert h n ret
+            return ret
+      f a = return a
+  f bdd
+
+-- | Unique existential quantification (∃!)
+existsUnique :: forall a. ItemOrder a => Int -> BDD a -> BDD a
+existsUnique x bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f n@(Branch ind lo hi) = do
+        m <- H.lookup h n
+        case m of
+          Just y -> return y
+          Nothing -> do
+            ret <- case compareItem (Proxy :: Proxy a) ind x of
+              LT -> liftM2 (Branch ind) (f lo) (f hi)
+              EQ -> return $ lo `xor` hi
+              GT -> return F
+            H.insert h n ret
+            return ret
+      f _ = return F
+  f bdd
 
 -- ------------------------------------------------------------------------
 
