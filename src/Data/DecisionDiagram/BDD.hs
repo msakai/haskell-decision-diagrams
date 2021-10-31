@@ -118,6 +118,7 @@ data BDDCase2 a
   = BDDCase2LT Int (BDD a) (BDD a)
   | BDDCase2GT Int (BDD a) (BDD a)
   | BDDCase2EQ Int (BDD a) (BDD a) (BDD a) (BDD a)
+  | BDDCase2EQ2 Bool Bool
 
 bddCase2 :: forall a. ItemOrder a => Proxy a -> BDD a -> BDD a -> BDDCase2 a
 bddCase2 _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
@@ -127,7 +128,10 @@ bddCase2 _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
     EQ -> BDDCase2EQ ptop p0 p1 q0 q1
 bddCase2 _ (Branch ptop p0 p1) _ = BDDCase2LT ptop p0 p1
 bddCase2 _ _ (Branch qtop q0 q1) = BDDCase2GT qtop q0 q1
-bddCase2 _ _ _ = error "should not happen"
+bddCase2 _ T T = BDDCase2EQ2 True True
+bddCase2 _ T F = BDDCase2EQ2 True False
+bddCase2 _ F T = BDDCase2EQ2 False True
+bddCase2 _ F F = BDDCase2EQ2 False False
 
 level :: BDD a -> Level a
 level T = Terminal
@@ -346,6 +350,7 @@ restrictLaw law bdd = runST $ do
                 | lo1 == F  -> f hi1 n2
                 | hi1 == F  -> f lo1 n2
                 | otherwise -> liftM2 (Branch x1) (f lo1 n2) (f hi1 n2)
+              BDDCase2EQ2 _ _ -> error "restrictLaw: should not happen"
             H.insert h (n1, n2) ret
             return ret
   f law bdd
