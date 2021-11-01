@@ -600,6 +600,20 @@ prop_restrictSet_or =
 
 -- ------------------------------------------------------------------------
 
+prop_restrictLaw :: Property
+prop_restrictLaw =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      forAll arbitrary $ \law ->
+        (law BDD..&&. BDD.restrictLaw law a) === (law BDD..&&. a)
+
+case_restrictLaw_case_0 :: Assertion
+case_restrictLaw_case_0 = (law BDD..&&. BDD.restrictLaw law a) @?= (law BDD..&&. a)
+  where
+    a, law :: BDD BDD.DefaultOrder
+    a = BDD.Branch 2 BDD.F BDD.T
+    law = BDD.Branch 1 (BDD.Branch 2 BDD.T BDD.F) (BDD.Branch 2 BDD.F BDD.T)
+
 prop_restrictLaw_true :: Property
 prop_restrictLaw_true =
   withDefaultOrder $ \(_ :: Proxy o) ->
@@ -637,7 +651,7 @@ prop_restrictLaw_restrictSet =
 --               ==>
 --               (BDD.restrictLaw val a === BDD.restrictLaw val2 (BDD.restrictLaw val1 a))
 
--- counterexample to above prop_restrictLaw_and_condition
+-- counterexample to the above prop_restrictLaw_and_condition
 case_restrictLaw_case_1 :: Assertion
 case_restrictLaw_case_1 = do
   -- BDD.restrictLaw val a @?= BDD.restrictLaw val2 (BDD.restrictLaw val1 a)
@@ -688,6 +702,37 @@ prop_restrictLaw_or =
     forAll arbitrary $ \(a :: BDD o, b) ->
       forAll (arbitrary `suchThat` (/= BDD.false)) $ \val ->
         BDD.restrictLaw val (a BDD..||. b) === (BDD.restrictLaw val a BDD..||. BDD.restrictLaw val b)
+
+-- prop_restrictLaw_minimality :: Property
+-- prop_restrictLaw_minimality =
+--   withDefaultOrder $ \(_ :: Proxy o) ->
+--     forAll arbitrary $ \(a :: BDD o) ->
+--       forAll arbitrary $ \law ->
+--         let b = BDD.restrictLaw law a
+--          in counterexample (show b) $
+--               ((law BDD..&&. b) === (law BDD..&&. a))
+--               .&&.
+--               conjoin [counterexample (show b') $ (law BDD..&&. b') =/= (law BDD..&&. a) | b' <- shrink b]
+
+case_restrictLaw_non_minimal_1 :: Assertion
+case_restrictLaw_non_minimal_1 = do
+  (law BDD..&&. BDD.restrictLaw law a) @?= (law BDD..&&. a)
+  BDD.restrictLaw law a @?= b -- should be 'a'?
+  where
+    law, a :: BDD BDD.DefaultOrder
+    law = BDD.Branch 1 (BDD.Branch 2 BDD.F BDD.T) BDD.T -- x1 ∨ x2
+    a = BDD.Branch 2 BDD.T BDD.F -- ¬x2
+    b = BDD.Branch 1 BDD.F (BDD.Branch 2 BDD.T BDD.F) -- x1 ∧ ¬x2
+
+case_restrictLaw_non_minimal_2 :: Assertion
+case_restrictLaw_non_minimal_2 = do
+  (law BDD..&&. BDD.restrictLaw law a) @?= (law BDD..&&. a)
+  BDD.restrictLaw law a @?= b -- should be 'a'?
+  where
+    law, a, b :: BDD BDD.DefaultOrder
+    law = BDD.Branch 1 BDD.T (BDD.Branch 2 BDD.F BDD.T) -- ¬x1 ∨ x2
+    a = BDD.Branch 2 BDD.F BDD.T -- x2
+    b = BDD.Branch 1 (BDD.Branch 2 BDD.F BDD.T) BDD.T -- x1 ∨ x2
 
 -- ------------------------------------------------------------------------
 
