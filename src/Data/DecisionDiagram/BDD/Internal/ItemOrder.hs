@@ -55,11 +55,11 @@ data CustomOrder a
 instance Reifies s (Int -> Int -> Ordering) => ItemOrder (CustomOrder s) where
   compareItem _ = reflect (Proxy :: Proxy s)
 
-withAscOrder :: forall r. (forall a. ItemOrder a => Proxy a -> r) -> r
-withAscOrder k = k (Proxy :: Proxy AscOrder)
+withAscOrder :: forall r. (Proxy AscOrder -> r) -> r
+withAscOrder k = k Proxy
 
-withDescOrder :: forall r. (forall a. ItemOrder a => Proxy a -> r) -> r
-withDescOrder k = k (Proxy :: Proxy DescOrder)
+withDescOrder :: forall r. (Proxy DescOrder -> r) -> r
+withDescOrder k = k Proxy
 
 withDefaultOrder :: forall r. (forall a. ItemOrder a => Proxy a -> r) -> r
 withDefaultOrder k = k (Proxy :: Proxy DefaultOrder)
