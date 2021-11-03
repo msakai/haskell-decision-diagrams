@@ -100,6 +100,14 @@ module Data.DecisionDiagram.ZDD
   -- * Conversion
   , toListOfIntSets
   , toSetOfIntSets
+
+  -- ** Conversion from/to graphs
+  , Graph
+  , Node (..)
+  , toGraph
+  , toGraph'
+  , fromGraph
+  , fromGraph'
   ) where
 
 import Prelude hiding (null)
@@ -110,11 +118,14 @@ import Control.Monad.Primitive
 #endif
 import Control.Monad.ST
 import qualified Data.Foldable as Foldable
+import Data.Functor.Identity
 import Data.Hashable
 import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List (sortBy)
@@ -123,6 +134,7 @@ import Data.Proxy
 import Data.Ratio
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.STRef
 import qualified GHC.Exts as Exts
 import Numeric.Natural
 #if MIN_VERSION_mwc_random(0,15,0)
@@ -701,5 +713,69 @@ findMaxSum weight =
       where
         w2' = w2 + weight x
         s2' = IntSet.insert x s2
+
+-- ------------------------------------------------------------------------
+
+type Graph = IntMap Node
+
+data Node
+  = NodeEmpty
+  | NodeBase
+  | NodeBranch !Int Int Int
+  deriving (Eq, Show, Read)
+
+-- | Convert a ZDD into a pointed graph
+toGraph :: ZDD a -> (Graph, Int)
+toGraph bdd =
+  case toGraph' (Identity bdd) of
+    (g, Identity v) -> (g, v)
+
+-- | Convert multiple ZDDs into a graph
+toGraph' :: Traversable t => t (ZDD a) -> (Graph, t Int)
+toGraph' bs = runST $ do
+  h <- C.newSized defaultTableSize
+  H.insert h Empty 0
+  H.insert h Base 1
+  counter <- newSTRef 2
+  ref <- newSTRef $ IntMap.fromList [(0, NodeEmpty), (1, NodeBase)]
+
+  let f Empty = return 0
+      f Base = return 1
+      f p@(Branch x lo hi) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            r0 <- f lo
+            r1 <- f hi
+            n <- readSTRef counter
+            writeSTRef counter $! n+1
+            H.insert h p n
+            modifySTRef' ref (IntMap.insert n (NodeBranch x r0 r1))
+            return n
+
+  vs <- mapM f bs
+  g <- readSTRef ref
+  return (g, vs)
+
+-- | Convert a pointed graph into a ZDD
+fromGraph :: (Graph, Int) -> ZDD a
+fromGraph (g, v) =
+  case IntMap.lookup v (fromGraph' g) of
+    Nothing -> error ("Data.DecisionDiagram.ZDD.fromGraph: invalid node id " ++ show v)
+    Just bdd -> bdd
+
+-- | Convert nodes of a graph into ZDDs
+fromGraph' :: Graph -> IntMap (ZDD a)
+fromGraph' g = ret
+  where
+    ret = IntMap.map f g
+    f NodeEmpty = Empty
+    f NodeBase = Base
+    f (NodeBranch x lo hi) =
+      case (IntMap.lookup lo ret, IntMap.lookup hi ret) of
+        (Nothing, _) -> error ("Data.DecisionDiagram.ZDD.fromGraph': invalid node id " ++ show lo)
+        (_, Nothing) -> error ("Data.DecisionDiagram.ZDD.fromGraph': invalid node id " ++ show hi)
+        (Just lo', Just hi') -> Branch x lo' hi'
 
 -- ------------------------------------------------------------------------
