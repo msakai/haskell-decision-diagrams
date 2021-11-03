@@ -294,6 +294,39 @@ prop_singleton =
           a = ZDD.singleton xs
        in counterexample (show a) $ ZDD.toSetOfIntSets a === Set.singleton xs
 
+prop_subsets_member :: Property
+prop_subsets_member =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \xs ->
+      let a :: ZDD o
+          a = ZDD.subsets xs
+       in counterexample (show a) $ forAll (liftM IntSet.fromList (sublistOf (IntSet.toList xs))) $ \ys ->
+            ys `ZDD.member` a
+
+prop_subsets_member_empty :: Property
+prop_subsets_member_empty =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \xs ->
+      let a :: ZDD o
+          a = ZDD.subsets xs
+       in counterexample (show a) $ IntSet.empty `ZDD.member` a
+
+prop_subsets_member_itself :: Property
+prop_subsets_member_itself =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \xs ->
+      let a :: ZDD o
+          a = ZDD.subsets xs
+       in counterexample (show a) $ xs `ZDD.member` a
+
+prop_subsets_size :: Property
+prop_subsets_size =
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \xs ->
+      let a :: ZDD o
+          a = ZDD.subsets xs
+       in counterexample (show a) $ ZDD.size a === (2 :: Integer) ^ (IntSet.size xs)
+
 prop_toList_fromList :: Property
 prop_toList_fromList =
   withDefaultOrder $ \(_ :: Proxy o) ->
