@@ -32,7 +32,6 @@ module Data.DecisionDiagram.BDD
 
   -- * Item ordering
   , ItemOrder (..)
-  , DefaultOrder
   , AscOrder
   , DescOrder
   , withDefaultOrder

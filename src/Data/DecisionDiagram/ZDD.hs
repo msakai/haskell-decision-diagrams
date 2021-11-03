@@ -34,7 +34,6 @@ module Data.DecisionDiagram.ZDD
 
   -- * Item ordering
   , ItemOrder (..)
-  , DefaultOrder
   , AscOrder
   , DescOrder
   , withDefaultOrder

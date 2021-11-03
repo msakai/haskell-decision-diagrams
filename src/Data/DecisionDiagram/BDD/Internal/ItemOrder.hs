@@ -18,7 +18,6 @@ module Data.DecisionDiagram.BDD.Internal.ItemOrder
   (
   -- * Item ordering
     ItemOrder (..)
-  , DefaultOrder
   , AscOrder
   , DescOrder
   , withDefaultOrder
@@ -37,8 +36,6 @@ import Data.Reflection
 
 class ItemOrder a where
   compareItem :: proxy a -> Int -> Int -> Ordering
-
-type DefaultOrder = AscOrder
 
 data AscOrder
 
@@ -61,8 +58,9 @@ withAscOrder k = k Proxy
 withDescOrder :: forall r. (Proxy DescOrder -> r) -> r
 withDescOrder k = k Proxy
 
+-- | Currently the default order is 'AscOrder'
 withDefaultOrder :: forall r. (forall a. ItemOrder a => Proxy a -> r) -> r
-withDefaultOrder k = k (Proxy :: Proxy DefaultOrder)
+withDefaultOrder k = k (Proxy :: Proxy AscOrder)
 
 withCustomOrder :: forall r. (Int -> Int -> Ordering) -> (forall a. ItemOrder a => Proxy a -> r) -> r
 withCustomOrder cmp k = reify cmp (\(_ :: Proxy s) -> k (Proxy :: Proxy (CustomOrder s)))
