@@ -483,7 +483,12 @@ fold ff tt br bdd = runST $ do
 
 -- | Strict version of 'fold'
 fold' :: b -> b -> (Int -> b -> b -> b) -> BDD a -> b
-fold' !ff !tt br bdd = runST $ do
+fold' ff tt br bdd = runST $ do
+  op <- mkFold'Op ff tt br
+  op bdd
+
+mkFold'Op :: b -> b -> (Int -> b -> b -> b) -> ST s (BDD a -> ST s b)
+mkFold'Op !ff !tt br = do
   h <- C.newSized defaultTableSize
   let f F = return ff
       f T = return tt
@@ -497,13 +502,18 @@ fold' !ff !tt br bdd = runST $ do
             let ret = br top r0 r1
             seq ret $ H.insert h p ret
             return ret
-  f bdd
+  return f
 
 -- ------------------------------------------------------------------------
 
 -- | All the variables that this BDD depends on.
 support :: BDD a -> IntSet
-support = fold' IntSet.empty IntSet.empty f
+support bdd = runST $ do
+  op <- mkSupportOp
+  op bdd
+
+mkSupportOp :: ST s (BDD a -> ST s IntSet)
+mkSupportOp = mkFold'Op IntSet.empty IntSet.empty f
   where
     f x lo hi = IntSet.insert x (lo `IntSet.union` hi)
 
@@ -633,14 +643,18 @@ subst x n m = runST $ do
 -- | Simultaneous substitution
 substSet :: forall a. ItemOrder a => IntMap (BDD a) -> BDD a -> BDD a
 substSet s m = runST $ do
+  supportOp <- mkSupportOp
+
   h <- C.newSized defaultTableSize
   let -- f :: IntMap (BDD a) -> [(IntMap Bool, BDD a)] -> IntMap (BDD a) -> ST _ (BDD a)
       f conditions conditioned _ | assert (length conditioned >= 1 && all (\(cond, _) -> IntMap.keysSet cond `IntSet.isSubsetOf` IntMap.keysSet conditions) conditioned) False = undefined
       f conditions conditioned remaining = do
         let l1 = minimum $ map (level . snd) conditioned
             -- remaining' = IntMap.filterWithKey (\x _ -> l1 <= NonTerminal x) remaining
-            remaining' = IntMap.restrictKeys remaining (IntSet.unions [support a | (_, a) <- conditioned]) -- TODO: memoize 'support'?
-            l = minimum $ l1 : map level (IntMap.elems remaining' ++ IntMap.elems conditions)
+        remaining' <- do
+          tmp <- liftM IntSet.unions $ mapM (supportOp . snd) conditioned
+          return $ IntMap.restrictKeys remaining tmp
+        let l = minimum $ l1 : map level (IntMap.elems remaining' ++ IntMap.elems conditions)
         assert (all (\c -> NonTerminal c <= l) (IntMap.keys conditions)) $ return ()
         case l of
           Terminal -> do
