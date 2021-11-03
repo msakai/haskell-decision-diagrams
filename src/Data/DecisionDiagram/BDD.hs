@@ -28,7 +28,7 @@
 module Data.DecisionDiagram.BDD
   (
   -- * The BDD type
-    BDD (F, T, Branch)
+    BDD (F, T, Leaf, Branch)
 
   -- * Item ordering
   , ItemOrder (..)
@@ -129,6 +129,16 @@ pattern F = BDD Node.F
 pattern T :: BDD a
 pattern T = BDD Node.T
 
+pattern Leaf :: Bool -> BDD a
+pattern Leaf b <- (asBool -> Just b) where
+  Leaf True = BDD Node.T
+  Leaf False = BDD Node.F
+
+asBool :: BDD a -> Maybe Bool
+asBool (BDD Node.T) = Just True
+asBool (BDD Node.F) = Just False
+asBool _ = Nothing
+
 -- | Smart constructor that takes the BDD reduction rules into account
 pattern Branch :: Int -> BDD a -> BDD a -> BDD a
 pattern Branch x lo hi <- BDD (Node.Branch x (BDD -> lo) (BDD -> hi)) where
@@ -137,6 +147,7 @@ pattern Branch x lo hi <- BDD (Node.Branch x (BDD -> lo) (BDD -> hi)) where
     | otherwise = BDD (Node.Branch x lo hi)
 
 {-# COMPLETE T, F, Branch #-}
+{-# COMPLETE Leaf, Branch #-}
 
 nodeId :: BDD a -> Int
 nodeId (BDD node) = Node.nodeId node
@@ -155,15 +166,11 @@ bddCase2 _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
     EQ -> BDDCase2EQ ptop p0 p1 q0 q1
 bddCase2 _ (Branch ptop p0 p1) _ = BDDCase2LT ptop p0 p1
 bddCase2 _ _ (Branch qtop q0 q1) = BDDCase2GT qtop q0 q1
-bddCase2 _ T T = BDDCase2EQ2 True True
-bddCase2 _ T F = BDDCase2EQ2 True False
-bddCase2 _ F T = BDDCase2EQ2 False True
-bddCase2 _ F F = BDDCase2EQ2 False False
+bddCase2 _ (Leaf b1) (Leaf b2) = BDDCase2EQ2 b1 b2
 
 level :: BDD a -> Level a
-level T = Terminal
-level F = Terminal
 level (Branch x _ _) = NonTerminal x
+level (Leaf _) = Terminal
 
 -- ------------------------------------------------------------------------
 
@@ -197,8 +204,7 @@ var ind = Branch ind F T
 notB :: BDD a -> BDD a
 notB bdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f T = return F
-      f F = return T
+  let f (Leaf b) = return (Leaf (not b))
       f n@(Branch ind lo hi) = do
         m <- H.lookup h n
         case m of
@@ -293,10 +299,7 @@ mkXOROp = mkApplyOp True f
 (.<=>.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
 (.<=>.) = apply True f
   where
-    f T T = Just T
-    f T F = Just F
-    f F T = Just F
-    f F F = Just T
+    f (Leaf b1) (Leaf b2) = Just (Leaf (b1 == b2))
     f a b | a == b = Just T
     f _ _ = Nothing
 
@@ -304,8 +307,7 @@ mkXOROp = mkApplyOp True f
 ite :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a -> BDD a
 ite c' t' e' = runST $ do
   h <- C.newSized defaultTableSize
-  let f T t _ = return t
-      f F _ e = return e
+  let f (Leaf b) t e = if b then return t else return e
       f _ t e | t == e = return t
       f c t e = do
         case minimum [level c, level t, level e] of
@@ -526,8 +528,7 @@ mkSupportOp = mkFold'Op IntSet.empty IntSet.empty f
 evaluate :: (Int -> Bool) -> BDD a -> Bool
 evaluate f = g
   where
-    g F = False
-    g T = True
+    g (Leaf b) = b
     g (Branch x lo hi)
       | f x = g hi
       | otherwise = g lo
@@ -538,8 +539,7 @@ evaluate f = g
 restrict :: forall a. ItemOrder a => Int -> Bool -> BDD a -> BDD a
 restrict x val bdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f T = return T
-      f F = return F
+  let f n@(Leaf _) = return n
       f n@(Branch ind lo hi) = do
         m <- H.lookup h n
         case m of
@@ -558,8 +558,7 @@ restrictSet :: forall a. ItemOrder a => IntMap Bool -> BDD a -> BDD a
 restrictSet val bdd = runST $ do
   h <- C.newSized defaultTableSize
   let f [] n = return n
-      f _ T = return T
-      f _ F = return F
+      f _ n@(Leaf _) = return n
       f xxs@((x,v) : xs) n@(Branch ind lo hi) = do
         m <- H.lookup h n
         case m of
@@ -581,8 +580,7 @@ restrictLaw law bdd = runST $ do
   h <- C.newSized defaultTableSize
   let f T n = return n
       f F _ = return T  -- Is this correct?
-      f _ F = return F
-      f _ T = return T
+      f _ n@(Leaf _) = return n
       f n1 n2 | n1 == n2 = return T
       f n1 n2 = do
         m <- H.lookup h (n1, n2)
@@ -703,13 +701,6 @@ substSet s m = runST $ do
           )
       where
         fixed = IntMap.mapMaybe asBool conditions
-
-    asBool :: BDD a -> Maybe Bool
-    asBool a =
-      case a of
-        T -> Just True
-        F -> Just False
-        _ -> Nothing
 
 -- ------------------------------------------------------------------------
 
