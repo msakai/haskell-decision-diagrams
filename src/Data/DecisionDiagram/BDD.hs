@@ -33,7 +33,11 @@ module Data.DecisionDiagram.BDD
   -- * Item ordering
   , ItemOrder (..)
   , DefaultOrder
+  , AscOrder
+  , DescOrder
   , withDefaultOrder
+  , withAscOrder
+  , withDescOrder
   , withCustomOrder
 
   -- * Boolean operations

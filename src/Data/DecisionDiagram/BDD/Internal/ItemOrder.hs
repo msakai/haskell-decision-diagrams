@@ -19,7 +19,11 @@ module Data.DecisionDiagram.BDD.Internal.ItemOrder
   -- * Item ordering
     ItemOrder (..)
   , DefaultOrder
+  , AscOrder
+  , DescOrder
   , withDefaultOrder
+  , withAscOrder
+  , withDescOrder
   , withCustomOrder
 
   -- * Level
@@ -34,15 +38,28 @@ import Data.Reflection
 class ItemOrder a where
   compareItem :: proxy a -> Int -> Int -> Ordering
 
-data DefaultOrder
+type DefaultOrder = AscOrder
 
-instance ItemOrder DefaultOrder where
+data AscOrder
+
+data DescOrder
+
+instance ItemOrder AscOrder where
   compareItem _ = compare
+
+instance ItemOrder DescOrder where
+  compareItem _ = flip compare
 
 data CustomOrder a
 
 instance Reifies s (Int -> Int -> Ordering) => ItemOrder (CustomOrder s) where
   compareItem _ = reflect (Proxy :: Proxy s)
+
+withAscOrder :: forall r. (forall a. ItemOrder a => Proxy a -> r) -> r
+withAscOrder k = k (Proxy :: Proxy AscOrder)
+
+withDescOrder :: forall r. (forall a. ItemOrder a => Proxy a -> r) -> r
+withDescOrder k = k (Proxy :: Proxy DescOrder)
 
 withDefaultOrder :: forall r. (forall a. ItemOrder a => Proxy a -> r) -> r
 withDefaultOrder k = k (Proxy :: Proxy DefaultOrder)
