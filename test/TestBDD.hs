@@ -612,7 +612,7 @@ prop_restrictLaw =
 case_restrictLaw_case_0 :: Assertion
 case_restrictLaw_case_0 = (law BDD..&&. BDD.restrictLaw law a) @?= (law BDD..&&. a)
   where
-    a, law :: BDD BDD.DefaultOrder
+    a, law :: BDD BDD.AscOrder
     a = BDD.Branch 2 BDD.F BDD.T
     law = BDD.Branch 1 (BDD.Branch 2 BDD.T BDD.F) (BDD.Branch 2 BDD.F BDD.T)
 
@@ -660,7 +660,7 @@ case_restrictLaw_case_1 = do
   BDD.restrictLaw val a @?= BDD.Branch 2 BDD.F BDD.T
   BDD.restrictLaw val2 (BDD.restrictLaw val1 a) @?= BDD.Branch 1 BDD.T (Branch 2 BDD.F BDD.T)
   where
-    a :: BDD BDD.DefaultOrder
+    a :: BDD BDD.AscOrder
     a = Branch 2 BDD.F BDD.T -- x2
     val1 = BDD.Branch 1 BDD.F BDD.T -- x1
     val2 = BDD.Branch 1 (BDD.Branch 2 BDD.F BDD.T) BDD.T -- x1 ∨ x2
@@ -721,7 +721,7 @@ case_restrictLaw_non_minimal_1 = do
   (law BDD..&&. BDD.restrictLaw law a) @?= (law BDD..&&. a)
   BDD.restrictLaw law a @?= b -- should be 'a'?
   where
-    law, a :: BDD BDD.DefaultOrder
+    law, a :: BDD BDD.AscOrder
     law = BDD.Branch 1 (BDD.Branch 2 BDD.F BDD.T) BDD.T -- x1 ∨ x2
     a = BDD.Branch 2 BDD.T BDD.F -- ¬x2
     b = BDD.Branch 1 BDD.F (BDD.Branch 2 BDD.T BDD.F) -- x1 ∧ ¬x2
@@ -731,7 +731,7 @@ case_restrictLaw_non_minimal_2 = do
   (law BDD..&&. BDD.restrictLaw law a) @?= (law BDD..&&. a)
   BDD.restrictLaw law a @?= b -- should be 'a'?
   where
-    law, a, b :: BDD BDD.DefaultOrder
+    law, a, b :: BDD BDD.AscOrder
     law = BDD.Branch 1 BDD.T (BDD.Branch 2 BDD.F BDD.T) -- ¬x1 ∨ x2
     a = BDD.Branch 2 BDD.F BDD.T -- x2
     b = BDD.Branch 1 (BDD.Branch 2 BDD.F BDD.T) BDD.T -- x1 ∨ x2
@@ -798,7 +798,7 @@ case_substSet_case_1 :: Assertion
 case_substSet_case_1 = do
   BDD.substSet (IntMap.singleton x m1) m @?= BDD.subst x m1 m
   where
-    m :: BDD BDD.DefaultOrder
+    m :: BDD BDD.AscOrder
     m = BDD.Branch 1 (BDD.Branch 2 BDD.T BDD.F) (BDD.Branch 2 BDD.F BDD.F)
     x = 1
     m1 = BDD.Branch 1 BDD.T BDD.F
@@ -834,7 +834,7 @@ prop_substSet_compose =
 
 case_substSet_case_2 :: Assertion
 case_substSet_case_2 = do
-  let m :: BDD BDD.DefaultOrder
+  let m :: BDD BDD.AscOrder
       m = BDD.var 1 BDD..&&. BDD.var 2
   BDD.substSet (IntMap.fromList [(1, BDD.var 2), (2, BDD.var 3)]) m @?= BDD.var 2 BDD..&&. BDD.var 3
   BDD.substSet (IntMap.fromList [(1, BDD.var 3), (2, BDD.var 1)]) m @?= BDD.var 3 BDD..&&. BDD.var 1
