@@ -87,7 +87,6 @@ module Data.DecisionDiagram.BDD
 import Control.Exception (assert)
 import Control.Monad
 import Control.Monad.ST
-import qualified Data.Foldable as Foldable
 import Data.Function (on)
 import Data.Functor.Identity
 import Data.Hashable
@@ -207,8 +206,13 @@ notB bdd = runST $ do
             return ret
   f bdd
 
-apply' :: forall a. ItemOrder a => Bool -> (BDD a -> BDD a -> Maybe (BDD a)) -> BDD a -> BDD a -> BDD a
-apply' isCommutative func bdd1 bdd2 = runST $ do
+apply :: forall a. ItemOrder a => Bool -> (BDD a -> BDD a -> Maybe (BDD a)) -> BDD a -> BDD a -> BDD a
+apply isCommutative func bdd1 bdd2 = runST $ do
+  op <- mkApplyOp isCommutative func
+  op bdd1 bdd2
+
+mkApplyOp :: forall a s. ItemOrder a => Bool -> (BDD a -> BDD a -> Maybe (BDD a)) -> ST s (BDD a -> BDD a -> ST s (BDD a))
+mkApplyOp isCommutative func = do
   h <- C.newSized defaultTableSize
   let f a b | Just c <- func a b = return c
       f n1 n2 = do
@@ -221,14 +225,19 @@ apply' isCommutative func bdd1 bdd2 = runST $ do
               BDDCase2GT x2 lo2 hi2 -> liftM2 (Branch x2) (f n1 lo2) (f n1 hi2)
               BDDCase2LT x1 lo1 hi1 -> liftM2 (Branch x1) (f lo1 n2) (f hi1 n2)
               BDDCase2EQ x lo1 hi1 lo2 hi2 -> liftM2 (Branch x) (f lo1 lo2) (f hi1 hi2)
-              BDDCase2EQ2 _ _ -> error "apply': should not happen"
+              BDDCase2EQ2 _ _ -> error "apply: should not happen"
             H.insert h key ret
             return ret
-  f bdd1 bdd2
+  return f
 
 -- | Conjunction of two boolean function
 (.&&.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-(.&&.) = apply' True f
+(.&&.) bdd1 bdd2 = runST $ do
+  op <- mkAndOp
+  op bdd1 bdd2
+
+mkAndOp :: forall a s. ItemOrder a => ST s (BDD a -> BDD a -> ST s (BDD a))
+mkAndOp = mkApplyOp True f
   where
     f T b = Just b
     f F _ = Just F
@@ -239,7 +248,12 @@ apply' isCommutative func bdd1 bdd2 = runST $ do
 
 -- | Disjunction of two boolean function
 (.||.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-(.||.) = apply' True f
+(.||.) bdd1 bdd2 = runST $ do
+  op <- mkOrOp
+  op bdd1 bdd2
+
+mkOrOp :: forall a s. ItemOrder a => ST s (BDD a -> BDD a -> ST s (BDD a))
+mkOrOp = mkApplyOp True f
   where
     f T _ = Just T
     f F b = Just b
@@ -250,7 +264,12 @@ apply' isCommutative func bdd1 bdd2 = runST $ do
 
 -- | XOR
 xor :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-xor = apply' True f
+xor bdd1 bdd2 = runST $ do
+  op <- mkXOROp
+  op bdd1 bdd2
+
+mkXOROp :: forall a s. ItemOrder a => ST s (BDD a -> BDD a -> ST s (BDD a))
+mkXOROp = mkApplyOp True f
   where
     f F b = Just b
     f a F = Just a
@@ -259,7 +278,7 @@ xor = apply' True f
 
 -- | Implication
 (.=>.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-(.=>.) = apply' False f
+(.=>.) = apply False f
   where
     f F _ = Just T
     f T b = Just b
@@ -269,7 +288,7 @@ xor = apply' True f
 
 -- | Equivalence
 (.<=>.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-(.<=>.) = apply' True f
+(.<=>.) = apply True f
   where
     f T T = Just T
     f T F = Just F
@@ -304,17 +323,22 @@ ite c' t' e' = runST $ do
 
 -- | Conjunction of a list of BDDs.
 andB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a
-andB xs = Foldable.foldl' (.&&.) true xs
+andB xs = runST $ do
+  op <- mkAndOp
+  foldM op true xs
 
 -- | Disjunction of a list of BDDs.
 orB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a
-orB xs = Foldable.foldl' (.||.) false xs
+orB xs = runST $ do
+  op <- mkOrOp
+  foldM op false xs
 
 -- ------------------------------------------------------------------------
 
 -- | Universal quantification (∀)
 forAll :: forall a. ItemOrder a => Int -> BDD a -> BDD a
 forAll x bdd = runST $ do
+  andOp <- mkAndOp
   h <- C.newSized defaultTableSize
   let f n@(Branch ind lo hi) = do
         m <- H.lookup h n
@@ -322,7 +346,7 @@ forAll x bdd = runST $ do
           Just y -> return y
           Nothing -> do
             ret <- if ind == x
-                   then return $ lo .&&. hi
+                   then andOp lo hi
                    else liftM2 (Branch ind) (f lo) (f hi)
             H.insert h n ret
             return ret
@@ -332,6 +356,7 @@ forAll x bdd = runST $ do
 -- | Existential quantification (∃)
 exists :: forall a. ItemOrder a => Int -> BDD a -> BDD a
 exists x bdd = runST $ do
+  orOp <- mkOrOp
   h <- C.newSized defaultTableSize
   let f n@(Branch ind lo hi) = do
         m <- H.lookup h n
@@ -339,7 +364,7 @@ exists x bdd = runST $ do
           Just y -> return y
           Nothing -> do
             ret <- if ind == x
-                   then return $ lo .||. hi
+                   then orOp lo hi
                    else liftM2 (Branch ind) (f lo) (f hi)
             H.insert h n ret
             return ret
@@ -349,6 +374,7 @@ exists x bdd = runST $ do
 -- | Unique existential quantification (∃!)
 existsUnique :: forall a. ItemOrder a => Int -> BDD a -> BDD a
 existsUnique x bdd = runST $ do
+  xorOp <- mkXOROp
   h <- C.newSized defaultTableSize
   let f n@(Branch ind lo hi) = do
         m <- H.lookup h n
@@ -357,7 +383,7 @@ existsUnique x bdd = runST $ do
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) ind x of
               LT -> liftM2 (Branch ind) (f lo) (f hi)
-              EQ -> return $ lo `xor` hi
+              EQ -> xorOp lo hi
               GT -> return F
             H.insert h n ret
             return ret
@@ -367,6 +393,7 @@ existsUnique x bdd = runST $ do
 -- | Universal quantification (∀) over a set of variables
 forAllSet :: forall a. ItemOrder a => IntSet -> BDD a -> BDD a
 forAllSet vars bdd = runST $ do
+  andOp <- mkAndOp
   h <- C.newSized defaultTableSize
   let f xxs@(x : xs) n@(Branch ind lo hi) = do
         m <- H.lookup h n
@@ -378,7 +405,7 @@ forAllSet vars bdd = runST $ do
               EQ -> do
                 r0 <- f xs lo
                 r1 <- f xs hi
-                return (r0 .&&. r1)
+                andOp r0 r1
               GT -> f xs n
             H.insert h n ret
             return ret
@@ -388,6 +415,7 @@ forAllSet vars bdd = runST $ do
 -- | Existential quantification (∃) over a set of variables
 existsSet :: forall a. ItemOrder a => IntSet -> BDD a -> BDD a
 existsSet vars bdd = runST $ do
+  orOp <- mkOrOp
   h <- C.newSized defaultTableSize
   let f xxs@(x : xs) n@(Branch ind lo hi) = do
         m <- H.lookup h n
@@ -399,7 +427,7 @@ existsSet vars bdd = runST $ do
               EQ -> do
                 r0 <- f xs lo
                 r1 <- f xs hi
-                return (r0 .||. r1)
+                orOp r0 r1
               GT -> f xs n
             H.insert h n ret
             return ret
@@ -409,6 +437,7 @@ existsSet vars bdd = runST $ do
 -- | Unique existential quantification (∃!) over a set of variables
 existsUniqueSet :: forall a. ItemOrder a => IntSet -> BDD a -> BDD a
 existsUniqueSet vars bdd = runST $ do
+  xorOp <- mkXOROp
   h <- C.newSized defaultTableSize
   let f xxs@(x : xs) n@(Branch ind lo hi) = do
         let key = (xxs, n)
@@ -421,7 +450,7 @@ existsUniqueSet vars bdd = runST $ do
               EQ -> do
                 r0 <- f xs lo
                 r1 <- f xs hi
-                return (r0 `xor` r1)
+                xorOp r0 r1
               GT -> return F
             H.insert h key ret
             return ret
@@ -454,7 +483,12 @@ fold ff tt br bdd = runST $ do
 
 -- | Strict version of 'fold'
 fold' :: b -> b -> (Int -> b -> b -> b) -> BDD a -> b
-fold' !ff !tt br bdd = runST $ do
+fold' ff tt br bdd = runST $ do
+  op <- mkFold'Op ff tt br
+  op bdd
+
+mkFold'Op :: b -> b -> (Int -> b -> b -> b) -> ST s (BDD a -> ST s b)
+mkFold'Op !ff !tt br = do
   h <- C.newSized defaultTableSize
   let f F = return ff
       f T = return tt
@@ -468,13 +502,18 @@ fold' !ff !tt br bdd = runST $ do
             let ret = br top r0 r1
             seq ret $ H.insert h p ret
             return ret
-  f bdd
+  return f
 
 -- ------------------------------------------------------------------------
 
 -- | All the variables that this BDD depends on.
 support :: BDD a -> IntSet
-support = fold' IntSet.empty IntSet.empty f
+support bdd = runST $ do
+  op <- mkSupportOp
+  op bdd
+
+mkSupportOp :: ST s (BDD a -> ST s IntSet)
+mkSupportOp = mkFold'Op IntSet.empty IntSet.empty f
   where
     f x lo hi = IntSet.insert x (lo `IntSet.union` hi)
 
@@ -604,14 +643,18 @@ subst x n m = runST $ do
 -- | Simultaneous substitution
 substSet :: forall a. ItemOrder a => IntMap (BDD a) -> BDD a -> BDD a
 substSet s m = runST $ do
+  supportOp <- mkSupportOp
+
   h <- C.newSized defaultTableSize
   let -- f :: IntMap (BDD a) -> [(IntMap Bool, BDD a)] -> IntMap (BDD a) -> ST _ (BDD a)
       f conditions conditioned _ | assert (length conditioned >= 1 && all (\(cond, _) -> IntMap.keysSet cond `IntSet.isSubsetOf` IntMap.keysSet conditions) conditioned) False = undefined
       f conditions conditioned remaining = do
         let l1 = minimum $ map (level . snd) conditioned
             -- remaining' = IntMap.filterWithKey (\x _ -> l1 <= NonTerminal x) remaining
-            remaining' = IntMap.restrictKeys remaining (IntSet.unions [support a | (_, a) <- conditioned])
-            l = minimum $ l1 : map level (IntMap.elems remaining' ++ IntMap.elems conditions)
+        remaining' <- do
+          tmp <- liftM IntSet.unions $ mapM (supportOp . snd) conditioned
+          return $ IntMap.restrictKeys remaining tmp
+        let l = minimum $ l1 : map level (IntMap.elems remaining' ++ IntMap.elems conditions)
         assert (all (\c -> NonTerminal c <= l) (IntMap.keys conditions)) $ return ()
         case l of
           Terminal -> do

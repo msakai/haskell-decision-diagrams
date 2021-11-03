@@ -117,7 +117,6 @@ import Control.Monad
 import Control.Monad.Primitive
 #endif
 import Control.Monad.ST
-import qualified Data.Foldable as Foldable
 import Data.Functor.Identity
 import Data.Hashable
 import Data.HashMap.Lazy (HashMap)
@@ -207,6 +206,7 @@ data ZDDCase2 a
   = ZDDCase2LT Int (ZDD a) (ZDD a)
   | ZDDCase2GT Int (ZDD a) (ZDD a)
   | ZDDCase2EQ Int (ZDD a) (ZDD a) (ZDD a) (ZDD a)
+  | ZDDCase2EQ2 Bool Bool
 
 zddCase2 :: forall a. ItemOrder a => Proxy a -> ZDD a -> ZDD a -> ZDDCase2 a
 zddCase2 _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
@@ -216,7 +216,10 @@ zddCase2 _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
     EQ -> ZDDCase2EQ ptop p0 p1 q0 q1
 zddCase2 _ (Branch ptop p0 p1) _ = ZDDCase2LT ptop p0 p1
 zddCase2 _ _ (Branch qtop q0 q1) = ZDDCase2GT qtop q0 q1
-zddCase2 _ _ _ = error "should not happen"
+zddCase2 _ Base Base = ZDDCase2EQ2 True True
+zddCase2 _ Base Empty = ZDDCase2EQ2 True False
+zddCase2 _ Empty Base = ZDDCase2EQ2 False True
+zddCase2 _ Empty Empty = ZDDCase2EQ2 False False
 
 -- | The empty set (∅).
 empty :: ZDD a
@@ -301,6 +304,7 @@ delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
 -- | Insert an item into each element set of ZDD.
 mapInsert :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 mapInsert var zdd = runST $ do
+  unionOp <- mkUnionOp
   h <- C.newSized defaultTableSize
   let f p@Base = return (Branch var Empty p)
       f Empty = return Empty
@@ -312,7 +316,7 @@ mapInsert var zdd = runST $ do
             ret <- case compareItem (Proxy :: Proxy a) top var of
               GT -> return (Branch var Empty p)
               LT -> liftM2 (Branch top) (f p0) (f p1)
-              EQ -> return (Branch top Empty (p0 `union` p1))
+              EQ -> liftM (Branch top Empty) (unionOp p0 p1)
             H.insert h p ret
             return ret
   f zdd
@@ -320,6 +324,7 @@ mapInsert var zdd = runST $ do
 -- | Delete an item from each element set of ZDD.
 mapDelete :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 mapDelete var zdd = runST $ do
+  unionOp <- mkUnionOp
   h <- C.newSized defaultTableSize
   let f Base = return Base
       f Empty = return Empty
@@ -331,7 +336,7 @@ mapDelete var zdd = runST $ do
             ret <- case compareItem (Proxy :: Proxy a) top var of
               GT -> return p
               LT -> liftM2 (Branch top) (f p0) (f p1)
-              EQ -> return (p0 `union` p1)
+              EQ -> unionOp p0 p1
             H.insert h p ret
             return ret
   f zdd
@@ -358,6 +363,11 @@ change var zdd = runST $ do
 -- | Union of two family of sets.
 union :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 union zdd1 zdd2 = runST $ do
+  op <- mkUnionOp
+  op zdd1 zdd2
+
+mkUnionOp :: forall a s. ItemOrder a => ST s (ZDD a -> ZDD a -> ST s (ZDD a))
+mkUnionOp = do
   h <- C.newSized defaultTableSize
   let f Empty q = return q
       f p Empty = return p
@@ -372,17 +382,25 @@ union zdd1 zdd2 = runST $ do
               ZDDCase2LT ptop p0 p1 -> liftM2 (Branch ptop) (f p0 q) (pure p1)
               ZDDCase2GT qtop q0 q1 -> liftM2 (Branch qtop) (f p q0) (pure q1)
               ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (Branch top) (f p0 q0) (f p1 q1)
+              ZDDCase2EQ2 _ _ -> error "union: should not happen"
             H.insert h key ret
             return ret
-  f zdd1 zdd2
+  return f
 
 -- | Unions of a list of ZDDs.
 unions :: forall f a. (Foldable f, ItemOrder a) => f (ZDD a) -> ZDD a
-unions xs = Foldable.foldl' union empty xs
+unions xs = runST $ do
+  op <- mkUnionOp
+  foldM op empty xs
 
 -- | Intersection of two family of sets.
 intersection :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 intersection zdd1 zdd2 = runST $ do
+  op <- mkIntersectionOp
+  op zdd1 zdd2
+
+mkIntersectionOp :: forall a s. ItemOrder a => ST s (ZDD a -> ZDD a -> ST s (ZDD a))
+mkIntersectionOp = do
   h <- C.newSized defaultTableSize
   let f Empty _q = return Empty
       f _p Empty = return Empty
@@ -397,13 +415,19 @@ intersection zdd1 zdd2 = runST $ do
               ZDDCase2LT _ptop p0 _p1 -> f p0 q
               ZDDCase2GT _qtop q0 _q1 -> f p q0
               ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (Branch top) (f p0 q0) (f p1 q1)
+              ZDDCase2EQ2 _ _ -> error "intersection: should not happen"
             H.insert h key ret
             return ret
-  f zdd1 zdd2
+  return f
 
 -- | Difference of two family of sets.
 difference :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 difference zdd1 zdd2 = runST $ do
+  op <- mkDifferenceOp
+  op zdd1 zdd2
+
+mkDifferenceOp :: forall a s. ItemOrder a => ST s (ZDD a -> ZDD a -> ST s (ZDD a))
+mkDifferenceOp = do
   h <- C.newSized defaultTableSize
   let f Empty _ = return Empty
       f p Empty = return p
@@ -417,9 +441,10 @@ difference zdd1 zdd2 = runST $ do
               ZDDCase2LT ptop p0 p1 -> liftM2 (Branch ptop) (f p0 q) (pure p1)
               ZDDCase2GT _qtop q0 _q1 -> f p q0
               ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (Branch top) (f p0 q0) (f p1 q1)
+              ZDDCase2EQ2 _ _ -> error "difference: should not happen"
             H.insert h (p, q) ret
             return ret
-  f zdd1 zdd2
+  return f
 
 -- | See 'difference'
 (\\) :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
@@ -430,6 +455,12 @@ m1 \\ m2 = difference m1 m2
 -- Sometimes it is denoted as /P ↘ Q/.
 nonSuperset :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 nonSuperset zdd1 zdd2 = runST $ do
+  op <- mkNonSueprsetOp
+  op zdd1 zdd2
+
+mkNonSueprsetOp :: forall a s. ItemOrder a => ST s (ZDD a -> ZDD a -> ST s (ZDD a))
+mkNonSueprsetOp = do
+  intersectionOp <- mkIntersectionOp 
   h <- C.newSized defaultTableSize
   let f Empty _ = return Empty
       f _ Base = return Empty
@@ -444,14 +475,18 @@ nonSuperset zdd1 zdd2 = runST $ do
               ZDDCase2LT ptop p0 p1 -> liftM2 (Branch ptop) (f p0 q) (f p1 q)
               ZDDCase2GT _qtop q0 _q1 -> f p q0
               ZDDCase2EQ top p0 p1 q0 q1 -> do
-                r <- liftM2 intersection (f p1 q0) (f p1 q1)
-                liftM2 (Branch top) (f p0 q0) (pure r)
+                r0 <- f p1 q0
+                r1 <- f p1 q1
+                liftM2 (Branch top) (f p0 q0) (intersectionOp r0 r1)
+              ZDDCase2EQ2 _ _ -> error "nonSuperset: should not happen"
             H.insert h (p, q) ret
             return ret
-  f zdd1 zdd2
+  return f
 
 minimalHittingSetsKnuth' :: forall a. ItemOrder a => Bool -> ZDD a -> ZDD a
 minimalHittingSetsKnuth' imai zdd = runST $ do
+  unionOp <- mkUnionOp
+  diffOp <- if imai then mkDifferenceOp else mkNonSueprsetOp
   h <- C.newSized defaultTableSize
   let f Empty = return Base
       f Base = return Empty
@@ -460,9 +495,8 @@ minimalHittingSetsKnuth' imai zdd = runST $ do
         case m of
           Just ret -> return ret
           Nothing -> do
-            -- TODO: memoize union and difference/nonSuperset?
-            r0 <- f (union p0 p1)
-            r1 <- liftM2 (if imai then difference else nonSuperset) (f p0) (pure r0)
+            r0 <- f =<< unionOp p0 p1
+            r1 <- join $ liftM2 diffOp (f p0) (pure r0)
             let ret = Branch top r0 r1
             H.insert h p ret
             return ret
@@ -500,6 +534,7 @@ hittingSetsBDD = fold' BDD.true BDD.false (\top h0 h1 -> h0 BDD..&&. BDD.Branch 
 
 minimal :: forall a. ItemOrder a => BDD.BDD a -> ZDD a
 minimal bdd = runST $ do
+  diffOp <- mkDifferenceOp
   h <- C.newSized defaultTableSize
   let f BDD.F = return Empty
       f BDD.T = return Base
@@ -510,7 +545,7 @@ minimal bdd = runST $ do
           Nothing -> do
             ml <- f lo
             mh <- f hi
-            let ret = Branch x ml (difference mh ml)
+            ret <- liftM (Branch x ml) (diffOp mh ml)
             H.insert h p ret
             return ret
   f bdd
