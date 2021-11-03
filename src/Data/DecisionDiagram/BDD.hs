@@ -28,7 +28,7 @@
 module Data.DecisionDiagram.BDD
   (
   -- * The BDD type
-    BDD (BDD, F, T, Branch)
+    BDD (F, T, Branch)
 
   -- * Item ordering
   , ItemOrder (..)
