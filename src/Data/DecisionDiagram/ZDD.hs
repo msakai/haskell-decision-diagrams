@@ -143,6 +143,7 @@ import System.Random.Stateful (StatefulGen (..))
 import System.Random.MWC (Gen)
 #endif
 import System.Random.MWC.Distributions (bernoulli)
+import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
 import qualified Data.DecisionDiagram.BDD.Internal.Node as Node
@@ -157,7 +158,7 @@ defaultTableSize = 256
 
 -- | Zero-suppressed binary decision diagram representing family of sets
 newtype ZDD a = ZDD Node.Node
-  deriving (Eq, Hashable, Show)
+  deriving (Eq, Hashable)
 
 pattern Empty :: ZDD a
 pattern Empty = ZDD Node.F
@@ -176,6 +177,20 @@ pattern Branch x lo hi <- ZDD (Node.Branch x (ZDD -> lo) (ZDD -> hi)) where
 nodeId :: ZDD a -> Int
 nodeId (ZDD node) = Node.nodeId node
 
+-- ------------------------------------------------------------------------
+
+instance Show (ZDD a) where
+  showsPrec d a   = showParen (d > 10) $
+    showString "fromGraph " . shows (toGraph a)
+
+instance Read (ZDD a) where
+  readPrec = parens $ prec 10 $ do
+    Ident "fromGraph" <- lexP
+    gv <- readPrec
+    return (fromGraph gv)
+
+  readListPrec = readListPrecDefault
+
 instance ItemOrder a => Exts.IsList (ZDD a) where
   type Item (ZDD a) = IntSet
 
@@ -185,6 +200,8 @@ instance ItemOrder a => Exts.IsList (ZDD a) where
       f = sortBy (compareItem (Proxy :: Proxy a)) . IntSet.toList
 
   toList = fold' [] [IntSet.empty] (\top lo hi -> lo <> map (IntSet.insert top) hi)
+
+-- ------------------------------------------------------------------------
 
 data ZDDCase2 a
   = ZDDCase2LT Int (ZDD a) (ZDD a)

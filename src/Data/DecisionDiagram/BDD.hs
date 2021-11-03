@@ -100,6 +100,7 @@ import qualified Data.IntSet as IntSet
 import Data.List (sortBy)
 import Data.Proxy
 import Data.STRef
+import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
 import qualified Data.DecisionDiagram.BDD.Internal.Node as Node
@@ -118,7 +119,7 @@ defaultTableSize = 256
 
 -- | Reduced ordered binary decision diagram representing boolean function
 newtype BDD a = BDD Node.Node
-  deriving (Eq, Hashable, Show)
+  deriving (Eq, Hashable)
 
 pattern F :: BDD a
 pattern F = BDD Node.F
@@ -161,6 +162,20 @@ level :: BDD a -> Level a
 level T = Terminal
 level F = Terminal
 level (Branch x _ _) = NonTerminal x
+
+-- ------------------------------------------------------------------------
+
+instance Show (BDD a) where
+  showsPrec d a   = showParen (d > 10) $
+    showString "fromGraph " . shows (toGraph a)
+
+instance Read (BDD a) where
+  readPrec = parens $ prec 10 $ do
+    Ident "fromGraph" <- lexP
+    gv <- readPrec
+    return (fromGraph gv)
+
+  readListPrec = readListPrecDefault
 
 -- ------------------------------------------------------------------------
 
