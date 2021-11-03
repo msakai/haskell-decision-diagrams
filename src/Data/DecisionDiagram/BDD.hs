@@ -207,8 +207,8 @@ notB bdd = runST $ do
             return ret
   f bdd
 
-apply' :: forall a. ItemOrder a => Bool -> (BDD a -> BDD a -> Maybe (BDD a)) -> BDD a -> BDD a -> BDD a
-apply' isCommutative func bdd1 bdd2 = runST $ do
+apply :: forall a. ItemOrder a => Bool -> (BDD a -> BDD a -> Maybe (BDD a)) -> BDD a -> BDD a -> BDD a
+apply isCommutative func bdd1 bdd2 = runST $ do
   h <- C.newSized defaultTableSize
   let f a b | Just c <- func a b = return c
       f n1 n2 = do
@@ -221,14 +221,14 @@ apply' isCommutative func bdd1 bdd2 = runST $ do
               BDDCase2GT x2 lo2 hi2 -> liftM2 (Branch x2) (f n1 lo2) (f n1 hi2)
               BDDCase2LT x1 lo1 hi1 -> liftM2 (Branch x1) (f lo1 n2) (f hi1 n2)
               BDDCase2EQ x lo1 hi1 lo2 hi2 -> liftM2 (Branch x) (f lo1 lo2) (f hi1 hi2)
-              BDDCase2EQ2 _ _ -> error "apply': should not happen"
+              BDDCase2EQ2 _ _ -> error "apply: should not happen"
             H.insert h key ret
             return ret
   f bdd1 bdd2
 
 -- | Conjunction of two boolean function
 (.&&.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-(.&&.) = apply' True f
+(.&&.) = apply True f
   where
     f T b = Just b
     f F _ = Just F
@@ -239,7 +239,7 @@ apply' isCommutative func bdd1 bdd2 = runST $ do
 
 -- | Disjunction of two boolean function
 (.||.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-(.||.) = apply' True f
+(.||.) = apply True f
   where
     f T _ = Just T
     f F b = Just b
@@ -250,7 +250,7 @@ apply' isCommutative func bdd1 bdd2 = runST $ do
 
 -- | XOR
 xor :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-xor = apply' True f
+xor = apply True f
   where
     f F b = Just b
     f a F = Just a
@@ -259,7 +259,7 @@ xor = apply' True f
 
 -- | Implication
 (.=>.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-(.=>.) = apply' False f
+(.=>.) = apply False f
   where
     f F _ = Just T
     f T b = Just b
@@ -269,7 +269,7 @@ xor = apply' True f
 
 -- | Equivalence
 (.<=>.) :: forall a. ItemOrder a => BDD a -> BDD a -> BDD a
-(.<=>.) = apply' True f
+(.<=>.) = apply True f
   where
     f T T = Just T
     f T F = Just F
