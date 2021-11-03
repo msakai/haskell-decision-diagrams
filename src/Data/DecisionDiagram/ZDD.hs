@@ -30,7 +30,7 @@
 module Data.DecisionDiagram.ZDD
   (
   -- * ZDD type
-    ZDD (ZDD, Empty, Base, Branch)
+    ZDD (Empty, Base, Branch)
 
   -- * Item ordering
   , ItemOrder (..)

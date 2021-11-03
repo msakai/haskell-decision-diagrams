@@ -26,6 +26,8 @@ dependencies:
 
 library:
   source-dirs: src
+  other-modules:
+  - Data.DecisionDiagram.BDD.Internal.Node
   dependencies:
   - hashable >=1.2.7.0 && <1.4
   - hashtables >=1.2.3.1 && <1.3
