@@ -207,6 +207,7 @@ data ZDDCase2 a
   = ZDDCase2LT Int (ZDD a) (ZDD a)
   | ZDDCase2GT Int (ZDD a) (ZDD a)
   | ZDDCase2EQ Int (ZDD a) (ZDD a) (ZDD a) (ZDD a)
+  | ZDDCase2EQ2 Bool Bool
 
 zddCase2 :: forall a. ItemOrder a => Proxy a -> ZDD a -> ZDD a -> ZDDCase2 a
 zddCase2 _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
@@ -216,7 +217,10 @@ zddCase2 _ (Branch ptop p0 p1) (Branch qtop q0 q1) =
     EQ -> ZDDCase2EQ ptop p0 p1 q0 q1
 zddCase2 _ (Branch ptop p0 p1) _ = ZDDCase2LT ptop p0 p1
 zddCase2 _ _ (Branch qtop q0 q1) = ZDDCase2GT qtop q0 q1
-zddCase2 _ _ _ = error "should not happen"
+zddCase2 _ Base Base = ZDDCase2EQ2 True True
+zddCase2 _ Base Empty = ZDDCase2EQ2 True False
+zddCase2 _ Empty Base = ZDDCase2EQ2 False True
+zddCase2 _ Empty Empty = ZDDCase2EQ2 False False
 
 -- | The empty set (∅).
 empty :: ZDD a
@@ -372,6 +376,7 @@ union zdd1 zdd2 = runST $ do
               ZDDCase2LT ptop p0 p1 -> liftM2 (Branch ptop) (f p0 q) (pure p1)
               ZDDCase2GT qtop q0 q1 -> liftM2 (Branch qtop) (f p q0) (pure q1)
               ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (Branch top) (f p0 q0) (f p1 q1)
+              ZDDCase2EQ2 _ _ -> error "union: should not happen"
             H.insert h key ret
             return ret
   f zdd1 zdd2
@@ -397,6 +402,7 @@ intersection zdd1 zdd2 = runST $ do
               ZDDCase2LT _ptop p0 _p1 -> f p0 q
               ZDDCase2GT _qtop q0 _q1 -> f p q0
               ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (Branch top) (f p0 q0) (f p1 q1)
+              ZDDCase2EQ2 _ _ -> error "intersection: should not happen"
             H.insert h key ret
             return ret
   f zdd1 zdd2
@@ -417,6 +423,7 @@ difference zdd1 zdd2 = runST $ do
               ZDDCase2LT ptop p0 p1 -> liftM2 (Branch ptop) (f p0 q) (pure p1)
               ZDDCase2GT _qtop q0 _q1 -> f p q0
               ZDDCase2EQ top p0 p1 q0 q1 -> liftM2 (Branch top) (f p0 q0) (f p1 q1)
+              ZDDCase2EQ2 _ _ -> error "difference: should not happen"
             H.insert h (p, q) ret
             return ret
   f zdd1 zdd2
@@ -446,6 +453,7 @@ nonSuperset zdd1 zdd2 = runST $ do
               ZDDCase2EQ top p0 p1 q0 q1 -> do
                 r <- liftM2 intersection (f p1 q0) (f p1 q1)
                 liftM2 (Branch top) (f p0 q0) (pure r)
+              ZDDCase2EQ2 _ _ -> error "nonSuperset: should not happen"
             H.insert h (p, q) ret
             return ret
   f zdd1 zdd2
