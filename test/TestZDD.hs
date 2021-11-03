@@ -18,6 +18,7 @@ import qualified System.Random.MWC as Rand
 import Test.QuickCheck.Function (apply)
 import qualified Test.QuickCheck.Monadic as QM
 import Test.Tasty
+import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import Test.Tasty.TH
 
@@ -566,6 +567,113 @@ prop_toGraph_fromGraph = do
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(a :: ZDD o) ->
       ZDD.fromGraph (ZDD.toGraph a) === a
+
+-- ------------------------------------------------------------------------
+-- Test cases from JDD library
+-- https://bitbucket.org/vahidi/jdd/src/21e103689c697fa40022294a829cab04add8ff79/src/jdd/zdd/ZDD.java
+
+case_jdd_test_1 :: Assertion
+case_jdd_test_1 = do
+  let x1 = 1
+      x2 = 2
+
+      a, b, c, d, e, f, g :: ZDD ZDD.DescOrder
+      a = ZDD.empty          -- {}
+      b = ZDD.base           -- {{}}
+      c = ZDD.change x1 b    -- {{x1}}
+      d = ZDD.change x2 b    -- {{x2}}
+      e = ZDD.union c d      -- {{x1}, {x2}}
+      f = ZDD.union b e      -- {{}, {x1}, {x2}}
+      g = ZDD.difference f c -- {{}, {x2}}
+
+  -- directly from minatos paper, figure 9
+  -- [until we find a better way to test isomorphism...]
+  a @?= ZDD.Empty
+  b @?= ZDD.Base
+  c @?= ZDD.Branch x1 ZDD.empty ZDD.base
+  d @?= ZDD.Branch x2 ZDD.empty ZDD.base
+  e @?= ZDD.Branch x2 c ZDD.base
+  f @?= ZDD.Branch x2 (ZDD.Branch x1 ZDD.base ZDD.base) ZDD.base
+  g @?= ZDD.Branch x2 ZDD.base ZDD.base
+
+  -- intersect
+  ZDD.intersection a b @?= a
+  ZDD.intersection a ZDD.base @?= a
+  ZDD.intersection b b @?= b
+  ZDD.intersection c e @?= c
+  ZDD.intersection e f @?= e
+  ZDD.intersection e g @?= d
+
+  -- union
+  ZDD.union a a @?= a
+  ZDD.union b b @?= b
+  ZDD.union a b @?= b
+  ZDD.union g e @?= f
+
+  -- diff
+  ZDD.difference a a @?= a
+  ZDD.difference b b @?= a
+  ZDD.difference d c @?= d
+  ZDD.difference c d @?= c
+  ZDD.difference e c @?= d
+  ZDD.difference e d @?= c
+  ZDD.difference g b @?= d
+
+  ZDD.difference g d @?= b
+  ZDD.difference f g @?= c
+  ZDD.difference f e @?= b
+
+  -- subset0
+  ZDD.subset0 x1 b @?= b
+  ZDD.subset0 x2 b @?= b
+  ZDD.subset0 x2 d @?= a
+  ZDD.subset0 x2 e @?= c
+
+  -- subset1
+  ZDD.subset1 x1 b @?= ZDD.empty
+  ZDD.subset1 x2 b @?= ZDD.empty
+  ZDD.subset1 x2 d @?= b
+  ZDD.subset1 x2 g @?= b
+  ZDD.subset1 x1 g @?= a
+  ZDD.subset1 x2 e @?= b
+
+case_jdd_test_2 :: Assertion
+case_jdd_test_2 = do
+  let [a, b, c, d] = [4, 3, 2, 1]
+
+  -- this is the exact construction sequence of Fig.14 in "Zero-suppressed BDDs and their application" by Minato
+  let fig14 :: ZDD ZDD.DescOrder
+      fig14 = ZDD.union z00__ z0100
+        where
+          z0000 = ZDD.base
+          z000_ = ZDD.union z0000 (ZDD.change d z0000)
+          z00__ = ZDD.union z000_ (ZDD.change c z000_)
+          z0100 = ZDD.change b z0000
+
+  -- this is the exact construction sequence of Fig.13 in "Zero-suppressed BDDs and their application" by Minato
+  let fig13 :: ZDD ZDD.DescOrder
+      fig13 = ZDD.intersection z0___ tmp
+        where
+          z___0 = ZDD.subsets (IntSet.fromList [a, b, c])
+          z__0_ = ZDD.subsets (IntSet.fromList [a, b, d])
+          z_0__ = ZDD.subsets (IntSet.fromList [a, c, d])
+          z0___ = ZDD.subsets (IntSet.fromList [b, c, d])
+          z__00 = ZDD.intersection z___0 z__0_
+          tmp = ZDD.union z_0__ z__00
+
+  fig14 @?= fig13
+
+case_jdd_test_3 :: Assertion
+case_jdd_test_3 = do
+  let tmp :: ZDD ZDD.DescOrder
+      tmp  = ZDD.fromListOfIntSets $ map IntSet.fromList [[2], [0,1], [1]] -- "100 011 010"
+      tmp2 = ZDD.union (ZDD.singleton (IntSet.fromList [0, 1])) ZDD.base   -- union("11", base)
+  -- 1. INTERSECT
+  ZDD.intersection tmp tmp2 @?= ZDD.singleton (IntSet.fromList [0, 1])
+  -- 2. UNION
+  ZDD.union tmp tmp2 @?= ZDD.union tmp ZDD.base
+  -- 3. DIFF
+  ZDD.difference tmp tmp2 @?= ZDD.fromListOfIntSets (map IntSet.fromList [[1], [2]])
 
 -- ------------------------------------------------------------------------
 
