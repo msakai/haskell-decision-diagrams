@@ -42,6 +42,7 @@ module Data.DecisionDiagram.ZDD
   , empty
   , base
   , singleton
+  , subsets
   , fromListOfIntSets
   , fromSetOfIntSets
 
@@ -127,7 +128,7 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
-import Data.List (sortBy)
+import Data.List (foldl', sortBy)
 import Data.Maybe
 import Data.Proxy
 import Data.Ratio
@@ -232,6 +233,12 @@ base = Base
 -- | Create a ZDD that contains only a given set.
 singleton :: forall a. ItemOrder a => IntSet -> ZDD a
 singleton xs = insert xs empty
+
+-- | Set of all subsets, i.e. powerset
+subsets :: forall a. ItemOrder a => IntSet -> ZDD a
+subsets = foldl' f Base . sortBy (flip (compareItem (Proxy :: Proxy a))) . IntSet.toList
+  where
+    f zdd x = Branch x zdd zdd
 
 -- | Select subsets that contain a particular element and then remove the element from them
 subset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
