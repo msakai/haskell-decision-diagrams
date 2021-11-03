@@ -53,6 +53,7 @@ test-suite decision-diagrams-test
   other-modules:
       TestBDD
       TestZDD
+      Utils
       Paths_decision_diagrams
   hs-source-dirs:
       test

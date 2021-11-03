@@ -32,8 +32,11 @@ module Data.DecisionDiagram.BDD
 
   -- * Item ordering
   , ItemOrder (..)
-  , DefaultOrder
+  , AscOrder
+  , DescOrder
   , withDefaultOrder
+  , withAscOrder
+  , withDescOrder
   , withCustomOrder
 
   -- * Boolean operations
@@ -775,7 +778,7 @@ fromGraph' g = ret
 -- ------------------------------------------------------------------------
 
 -- https://ja.wikipedia.org/wiki/%E4%BA%8C%E5%88%86%E6%B1%BA%E5%AE%9A%E5%9B%B3
-_test_bdd :: BDD DefaultOrder
+_test_bdd :: BDD AscOrder
 _test_bdd = (notB x1 .&&. notB x2 .&&. notB x3) .||. (x1 .&&. x2) .||. (x2 .&&. x3)
   where
     x1 = var 1
