@@ -839,5 +839,13 @@ case_substSet_case_2 = do
 
 -- ------------------------------------------------------------------------
 
+prop_toGraph_fromGraph :: Property
+prop_toGraph_fromGraph = do
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: BDD o) ->
+      BDD.fromGraph (BDD.toGraph a) === a
+
+-- ------------------------------------------------------------------------
+
 bddTestGroup :: TestTree
 bddTestGroup = $(testGroupGenerator)

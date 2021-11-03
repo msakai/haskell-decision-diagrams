@@ -74,6 +74,14 @@ module Data.DecisionDiagram.BDD
   -- * Fold
   , fold
   , fold'
+
+  -- * Conversion from/to graphs
+  , Graph
+  , Node (..)
+  , toGraph
+  , toGraph'
+  , fromGraph
+  , fromGraph'
   ) where
 
 import Control.Exception (assert)
@@ -81,6 +89,7 @@ import Control.Monad
 import Control.Monad.ST
 import qualified Data.Foldable as Foldable
 import Data.Function (on)
+import Data.Functor.Identity
 import Data.Hashable
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
@@ -90,6 +99,8 @@ import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List (sortBy)
 import Data.Proxy
+import Data.STRef
+import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
 import qualified Data.DecisionDiagram.BDD.Internal.Node as Node
@@ -108,7 +119,7 @@ defaultTableSize = 256
 
 -- | Reduced ordered binary decision diagram representing boolean function
 newtype BDD a = BDD Node.Node
-  deriving (Eq, Hashable, Show)
+  deriving (Eq, Hashable)
 
 pattern F :: BDD a
 pattern F = BDD Node.F
@@ -151,6 +162,20 @@ level :: BDD a -> Level a
 level T = Terminal
 level F = Terminal
 level (Branch x _ _) = NonTerminal x
+
+-- ------------------------------------------------------------------------
+
+instance Show (BDD a) where
+  showsPrec d a   = showParen (d > 10) $
+    showString "fromGraph " . shows (toGraph a)
+
+instance Read (BDD a) where
+  readPrec = parens $ prec 10 $ do
+    Ident "fromGraph" <- lexP
+    gv <- readPrec
+    return (fromGraph gv)
+
+  readListPrec = readListPrecDefault
 
 -- ------------------------------------------------------------------------
 
@@ -639,6 +664,70 @@ substSet s m = runST $ do
         T -> Just True
         F -> Just False
         _ -> Nothing
+
+-- ------------------------------------------------------------------------
+
+type Graph = IntMap Node
+
+data Node
+  = NodeF
+  | NodeT
+  | NodeBranch !Int Int Int
+  deriving (Eq, Show, Read)
+
+-- | Convert a BDD into a pointed graph
+toGraph :: BDD a -> (Graph, Int)
+toGraph bdd =
+  case toGraph' (Identity bdd) of
+    (g, Identity v) -> (g, v)
+
+-- | Convert multiple BDDs into a graph
+toGraph' :: Traversable t => t (BDD a) -> (Graph, t Int)
+toGraph' bs = runST $ do
+  h <- C.newSized defaultTableSize
+  H.insert h F 0
+  H.insert h T 1
+  counter <- newSTRef 2
+  ref <- newSTRef $ IntMap.fromList [(0, NodeF), (1, NodeT)]
+
+  let f F = return 0
+      f T = return 1
+      f p@(Branch x lo hi) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            r0 <- f lo
+            r1 <- f hi
+            n <- readSTRef counter
+            writeSTRef counter $! n+1
+            H.insert h p n
+            modifySTRef' ref (IntMap.insert n (NodeBranch x r0 r1))
+            return n
+
+  vs <- mapM f bs
+  g <- readSTRef ref
+  return (g, vs)
+
+-- | Convert a pointed graph into a BDD
+fromGraph :: (Graph, Int) -> BDD a
+fromGraph (g, v) =
+  case IntMap.lookup v (fromGraph' g) of
+    Nothing -> error ("Data.DecisionDiagram.BDD.fromGraph: invalid node id " ++ show v)
+    Just bdd -> bdd
+
+-- | Convert nodes of a graph into BDDs
+fromGraph' :: Graph -> IntMap (BDD a)
+fromGraph' g = ret
+  where
+    ret = IntMap.map f g
+    f NodeF = F
+    f NodeT = T
+    f (NodeBranch x lo hi) =
+      case (IntMap.lookup lo ret, IntMap.lookup hi ret) of
+        (Nothing, _) -> error ("Data.DecisionDiagram.BDD.fromGraph': invalid node id " ++ show lo)
+        (_, Nothing) -> error ("Data.DecisionDiagram.BDD.fromGraph': invalid node id " ++ show hi)
+        (Just lo', Just hi') -> Branch x lo' hi'
 
 -- ------------------------------------------------------------------------
 

@@ -526,5 +526,13 @@ prop_findMaxSum =
 
 -- ------------------------------------------------------------------------
 
+prop_toGraph_fromGraph :: Property
+prop_toGraph_fromGraph = do
+  withDefaultOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(a :: ZDD o) ->
+      ZDD.fromGraph (ZDD.toGraph a) === a
+
+-- ------------------------------------------------------------------------
+
 zddTestGroup :: TestTree
 zddTestGroup = $(testGroupGenerator)
