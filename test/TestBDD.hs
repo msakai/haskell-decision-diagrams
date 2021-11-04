@@ -23,7 +23,7 @@ import Utils
 -- ------------------------------------------------------------------------
 
 instance BDD.ItemOrder a => Arbitrary (BDD a) where
-  arbitrary = arbitraryBDDOver =<< liftM IntSet.fromList arbitrary
+  arbitrary = arbitraryBDDOver =<< arbitrary
 
   shrink (BDD.F) = []
   shrink (BDD.T) = []
@@ -825,8 +825,8 @@ prop_substSet_not_occured =
 prop_substSet_compose :: Property
 prop_substSet_compose =
   forAllItemOrder $ \(_ :: Proxy o) ->
-    forAll (liftM IntSet.fromList arbitrary) $ \xs ->
-    forAll (liftM IntSet.fromList arbitrary) $ \ys ->
+    forAll arbitrary $ \xs ->
+    forAll arbitrary $ \ys ->
     forAll (liftM IntMap.fromList $ mapM (\x -> (,) <$> pure x <*> arbitraryBDDOver ys) (IntSet.toList xs)) $ \s1 ->
     forAll (liftM IntMap.fromList $ mapM (\y -> (,) <$> pure y <*> arbitrary) (IntSet.toList ys)) $ \s2 ->
     forAll (arbitraryBDDOver xs) $ \(m :: BDD o) ->
