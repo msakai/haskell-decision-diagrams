@@ -776,16 +776,3 @@ fromGraph' g = ret
         (Just lo', Just hi') -> Branch x lo' hi'
 
 -- ------------------------------------------------------------------------
-
--- https://ja.wikipedia.org/wiki/%E4%BA%8C%E5%88%86%E6%B1%BA%E5%AE%9A%E5%9B%B3
-_test_bdd :: BDD AscOrder
-_test_bdd = (notB x1 .&&. notB x2 .&&. notB x3) .||. (x1 .&&. x2) .||. (x2 .&&. x3)
-  where
-    x1 = var 1
-    x2 = var 2
-    x3 = var 3
-{-
-BDD (Node 880 (UBranch 1 (Node 611 (UBranch 2 (Node 836 UT) (Node 215 UF))) (Node 806 (UBranch 2 (Node 842 (UBranch 3 (Node 836 UT) (Node 215 UF))) (Node 464 (UBranch 3 (Node 215 UF) (Node 836 UT)))))))
--}
-
--- ------------------------------------------------------------------------
