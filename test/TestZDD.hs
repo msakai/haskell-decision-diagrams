@@ -303,7 +303,7 @@ prop_subsets_member =
     forAll arbitrary $ \xs ->
       let a :: ZDD o
           a = ZDD.subsets xs
-       in counterexample (show a) $ forAll (liftM IntSet.fromList (sublistOf (IntSet.toList xs))) $ \ys ->
+       in counterexample (show a) $ forAll (subsetOf xs) $ \ys ->
             ys `ZDD.member` a
 
 prop_subsets_member_empty :: Property
@@ -380,14 +380,14 @@ prop_delete :: Property
 prop_delete =
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(a :: ZDD o) ->
-      forAll (liftM IntSet.fromList $ sublistOf (IntSet.toList (ZDD.flatten a))) $ \xs ->
+      forAll (subsetOf (ZDD.flatten a)) $ \xs ->
         ZDD.toSetOfIntSets (ZDD.delete xs a) === Set.delete xs (ZDD.toSetOfIntSets a)
 
 prop_delete_idempotent :: Property
 prop_delete_idempotent =
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(a :: ZDD o) ->
-      forAll (liftM IntSet.fromList $ sublistOf (IntSet.toList (ZDD.flatten a))) $ \xs ->
+      forAll (subsetOf (ZDD.flatten a)) $ \xs ->
         let b = ZDD.delete xs a
          in counterexample (show b) $ ZDD.delete xs b === b
 
@@ -462,7 +462,7 @@ prop_member_2 :: Property
 prop_member_2 =
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(a :: ZDD o) ->
-      forAll (liftM IntSet.fromList $ sublistOf (IntSet.toList (ZDD.flatten a))) $ \s2 ->
+      forAll (subsetOf (ZDD.flatten a)) $ \s2 ->
         (s2 `ZDD.member` a) === (s2 `Set.member` ZDD.toSetOfIntSets a)
 
 prop_size :: Property
@@ -674,6 +674,11 @@ case_jdd_test_3 = do
   ZDD.union tmp tmp2 @?= ZDD.union tmp ZDD.base
   -- 3. DIFF
   ZDD.difference tmp tmp2 @?= ZDD.fromListOfIntSets (map IntSet.fromList [[1], [2]])
+
+-- ------------------------------------------------------------------------
+
+subsetOf :: IntSet -> Gen IntSet
+subsetOf = liftM IntSet.fromList . sublistOf . IntSet.toList
 
 -- ------------------------------------------------------------------------
 
