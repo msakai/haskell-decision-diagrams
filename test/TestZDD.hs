@@ -31,7 +31,7 @@ import Utils
 
 instance ZDD.ItemOrder a => Arbitrary (ZDD a) where
   arbitrary = do
-    vars <- liftM (sortBy (ZDD.compareItem (Proxy :: Proxy a)) . IntSet.toList . IntSet.fromList) arbitrary
+    vars <- liftM (sortBy (ZDD.compareItem (Proxy :: Proxy a)) . IntSet.toList) arbitrary
     let f vs n = oneof $
           [ return ZDD.empty
           , return ZDD.base
@@ -292,7 +292,7 @@ prop_base =
 prop_singleton :: Property
 prop_singleton =
   forAllItemOrder $ \(_ :: Proxy o) ->
-    forAll (liftM IntSet.fromList arbitrary) $ \xs ->
+    forAll arbitrary $ \xs ->
       let a :: ZDD o
           a = ZDD.singleton xs
        in counterexample (show a) $ ZDD.toSetOfIntSets a === Set.singleton xs
@@ -349,7 +349,7 @@ prop_fromList_toList =
 prop_toSetOfIntSets_fromSetOfIntSets :: Property
 prop_toSetOfIntSets_fromSetOfIntSets =
   forAllItemOrder $ \(_ :: Proxy o) ->
-    forAll (liftM (Set.fromList . map IntSet.fromList) arbitrary) $ \xss ->
+    forAll arbitrary $ \xss ->
       let a :: ZDD o
           a = ZDD.fromSetOfIntSets xss
        in counterexample (show a) $ ZDD.toSetOfIntSets a === xss
@@ -365,14 +365,14 @@ prop_insert :: Property
 prop_insert =
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(a :: ZDD o) ->
-      forAll (liftM IntSet.fromList arbitrary) $ \xs ->
+      forAll arbitrary $ \xs ->
         ZDD.toSetOfIntSets (ZDD.insert xs a) === Set.insert xs (ZDD.toSetOfIntSets a)
 
 prop_insert_idempotent :: Property
 prop_insert_idempotent =
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(a :: ZDD o) ->
-      forAll (liftM IntSet.fromList arbitrary) $ \xs ->
+      forAll arbitrary $ \xs ->
         let b = ZDD.insert xs a
          in counterexample (show b) $ ZDD.insert xs b === b
 
