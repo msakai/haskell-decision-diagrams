@@ -546,8 +546,8 @@ minimal :: forall a. ItemOrder a => BDD.BDD a -> ZDD a
 minimal bdd = runST $ do
   diffOp <- mkDifferenceOp
   h <- C.newSized defaultTableSize
-  let f BDD.F = return Empty
-      f BDD.T = return Base
+  let f (BDD.Leaf False) = return Empty
+      f (BDD.Leaf True) = return Base
       f p@(BDD.Branch x lo hi) = do
         m <- H.lookup h p
         case m of

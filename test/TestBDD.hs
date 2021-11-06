@@ -25,8 +25,7 @@ import Utils
 instance BDD.ItemOrder a => Arbitrary (BDD a) where
   arbitrary = arbitraryBDDOver =<< arbitrary
 
-  shrink (BDD.F) = []
-  shrink (BDD.T) = []
+  shrink (BDD.Leaf _) = []
   shrink (BDD.Branch x p0 p1) =
     [p0, p1]
     ++
@@ -613,8 +612,8 @@ case_restrictLaw_case_0 :: Assertion
 case_restrictLaw_case_0 = (law BDD..&&. BDD.restrictLaw law a) @?= (law BDD..&&. a)
   where
     a, law :: BDD BDD.AscOrder
-    a = BDD.Branch 2 BDD.F BDD.T
-    law = BDD.Branch 1 (BDD.Branch 2 BDD.T BDD.F) (BDD.Branch 2 BDD.F BDD.T)
+    a = BDD.Branch 2 (BDD.Leaf False) (BDD.Leaf True)
+    law = BDD.Branch 1 (BDD.Branch 2 (BDD.Leaf True) (BDD.Leaf False)) (BDD.Branch 2 (BDD.Leaf False) (BDD.Leaf True))
 
 prop_restrictLaw_true :: Property
 prop_restrictLaw_true =
@@ -657,13 +656,13 @@ prop_restrictLaw_restrictSet =
 case_restrictLaw_case_1 :: Assertion
 case_restrictLaw_case_1 = do
   -- BDD.restrictLaw val a @?= BDD.restrictLaw val2 (BDD.restrictLaw val1 a)
-  BDD.restrictLaw val a @?= BDD.Branch 2 BDD.F BDD.T
-  BDD.restrictLaw val2 (BDD.restrictLaw val1 a) @?= BDD.Branch 1 BDD.T (Branch 2 BDD.F BDD.T)
+  BDD.restrictLaw val a @?= BDD.Branch 2 (BDD.Leaf False) (BDD.Leaf True)
+  BDD.restrictLaw val2 (BDD.restrictLaw val1 a) @?= BDD.Branch 1 (BDD.Leaf True) (Branch 2 (BDD.Leaf False) (BDD.Leaf True))
   where
     a :: BDD BDD.AscOrder
-    a = Branch 2 BDD.F BDD.T -- x2
-    val1 = BDD.Branch 1 BDD.F BDD.T -- x1
-    val2 = BDD.Branch 1 (BDD.Branch 2 BDD.F BDD.T) BDD.T -- x1 ∨ x2
+    a = Branch 2 (BDD.Leaf False) (BDD.Leaf True) -- x2
+    val1 = BDD.Branch 1 (BDD.Leaf False) (BDD.Leaf True) -- x1
+    val2 = BDD.Branch 1 (BDD.Branch 2 (BDD.Leaf False) (BDD.Leaf True)) (BDD.Leaf True) -- x1 ∨ x2
     val = val1 BDD..&&. val2 -- x1
 
 prop_restrictLaw_or_condition :: Property
@@ -722,9 +721,9 @@ case_restrictLaw_non_minimal_1 = do
   BDD.restrictLaw law a @?= b -- should be 'a'?
   where
     law, a :: BDD BDD.AscOrder
-    law = BDD.Branch 1 (BDD.Branch 2 BDD.F BDD.T) BDD.T -- x1 ∨ x2
-    a = BDD.Branch 2 BDD.T BDD.F -- ¬x2
-    b = BDD.Branch 1 BDD.F (BDD.Branch 2 BDD.T BDD.F) -- x1 ∧ ¬x2
+    law = BDD.Branch 1 (BDD.Branch 2 (BDD.Leaf False) (BDD.Leaf True)) (BDD.Leaf True) -- x1 ∨ x2
+    a = BDD.Branch 2 (BDD.Leaf True) (BDD.Leaf False) -- ¬x2
+    b = BDD.Branch 1 (BDD.Leaf False) (BDD.Branch 2 (BDD.Leaf True) (BDD.Leaf False)) -- x1 ∧ ¬x2
 
 case_restrictLaw_non_minimal_2 :: Assertion
 case_restrictLaw_non_minimal_2 = do
@@ -732,9 +731,9 @@ case_restrictLaw_non_minimal_2 = do
   BDD.restrictLaw law a @?= b -- should be 'a'?
   where
     law, a, b :: BDD BDD.AscOrder
-    law = BDD.Branch 1 BDD.T (BDD.Branch 2 BDD.F BDD.T) -- ¬x1 ∨ x2
-    a = BDD.Branch 2 BDD.F BDD.T -- x2
-    b = BDD.Branch 1 (BDD.Branch 2 BDD.F BDD.T) BDD.T -- x1 ∨ x2
+    law = BDD.Branch 1 (BDD.Leaf True) (BDD.Branch 2 (BDD.Leaf False) (BDD.Leaf True)) -- ¬x1 ∨ x2
+    a = BDD.Branch 2 (BDD.Leaf False) (BDD.Leaf True) -- x2
+    b = BDD.Branch 1 (BDD.Branch 2 (BDD.Leaf False) (BDD.Leaf True)) (BDD.Leaf True) -- x1 ∨ x2
 
 -- ------------------------------------------------------------------------
 
@@ -799,9 +798,9 @@ case_substSet_case_1 = do
   BDD.substSet (IntMap.singleton x m1) m @?= BDD.subst x m1 m
   where
     m :: BDD BDD.AscOrder
-    m = BDD.Branch 1 (BDD.Branch 2 BDD.T BDD.F) (BDD.Branch 2 BDD.F BDD.F)
+    m = BDD.Branch 1 (BDD.Branch 2 (BDD.Leaf True) (BDD.Leaf False)) (BDD.Branch 2 (BDD.Leaf False) (BDD.Leaf True))
     x = 1
-    m1 = BDD.Branch 1 BDD.T BDD.F
+    m1 = BDD.Branch 1 (BDD.Leaf True) (BDD.Leaf False)
 
 prop_substSet_same_vars :: Property
 prop_substSet_same_vars =
