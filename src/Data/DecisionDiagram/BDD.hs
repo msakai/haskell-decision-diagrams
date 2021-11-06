@@ -472,6 +472,8 @@ existsUniqueSet vars bdd = runST $ do
 --
 -- It takes values for substituting 'false' and 'true',
 -- and a function for substiting non-terminal nodes ('Branch').
+--
+-- Note that its type is isomorphic to @('Sig' b -> b) -> BDD a -> b@.
 fold :: b -> b -> (Int -> b -> b -> b) -> BDD a -> b
 fold ff tt br bdd = runST $ do
   h <- C.newSized defaultTableSize

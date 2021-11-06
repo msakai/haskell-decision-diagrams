@@ -643,6 +643,8 @@ fromListOfSortedList = unions . map f
 --
 -- It takes values for substituting 'empty' and 'base',
 -- and a function for substiting non-terminal node.
+--
+-- Note that its type is isomorphic to @('Sig' b -> b) -> ZDD a -> b@.
 fold :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
 fold ff tt br zdd = runST $ do
   h <- C.newSized defaultTableSize
