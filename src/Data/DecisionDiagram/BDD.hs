@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -104,6 +105,7 @@ import qualified Data.IntSet as IntSet
 import Data.List (sortBy)
 import Data.Proxy
 import Data.STRef
+import GHC.Generics (Generic)
 import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
@@ -710,7 +712,9 @@ substSet s m = runST $ do
 data Sig a
   = SLeaf !Bool
   | SBranch !Int a a
-  deriving (Eq, Ord, Show, Read, Functor, Foldable, Traversable)
+  deriving (Eq, Ord, Show, Read, Generic, Functor, Foldable, Traversable)
+
+instance Hashable a => Hashable (Sig a)
 
 -- ------------------------------------------------------------------------
 

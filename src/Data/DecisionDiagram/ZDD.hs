@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -141,6 +142,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.STRef
 import qualified GHC.Exts as Exts
+import GHC.Generics (Generic)
 import Numeric.Natural
 #if MIN_VERSION_mwc_random(0,15,0)
 import System.Random.Stateful (StatefulGen (..))
@@ -785,7 +787,9 @@ data Sig a
   = SEmpty
   | SBase
   | SBranch !Int a a
-  deriving (Eq, Ord, Show, Read, Functor, Foldable, Traversable)
+  deriving (Eq, Ord, Show, Read, Generic, Functor, Foldable, Traversable)
+
+instance Hashable a => Hashable (Sig a)
 
 -- ------------------------------------------------------------------------
 
