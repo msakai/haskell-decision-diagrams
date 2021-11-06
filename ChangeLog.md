@@ -7,3 +7,5 @@
   replaced with `NodeLeaf`.
 
 * Introduce signature functor types (`Sig`)
+
+* Add other-extensions fields to `package.yaml`

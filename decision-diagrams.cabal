@@ -34,6 +34,20 @@ library
       Data.DecisionDiagram.BDD.Internal.Node
   hs-source-dirs:
       src
+  other-extensions:
+      BangPatterns
+      FlexibleContexts
+      FlexibleInstances
+      RankNTypes
+      ScopedTypeVariables
+      CPP
+      DeriveGeneric
+      DeriveTraversable
+      GeneralizedNewtypeDeriving
+      PatternSynonyms
+      TypeFamilies
+      UndecidableInstances
+      ViewPatterns
   build-depends:
       base >=4.7 && <5
     , containers >=0.5.11.0 && <0.7
@@ -57,6 +71,13 @@ test-suite decision-diagrams-test
       Paths_decision_diagrams
   hs-source-dirs:
       test
+  other-extensions:
+      BangPatterns
+      FlexibleContexts
+      FlexibleInstances
+      RankNTypes
+      ScopedTypeVariables
+      TemplateHaskell
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck >=2.11.3 && <2.15
