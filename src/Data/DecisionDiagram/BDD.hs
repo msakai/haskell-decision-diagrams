@@ -83,7 +83,6 @@ module Data.DecisionDiagram.BDD
 
   -- * Conversion from/to graphs
   , Graph
-  , Node (..)
   , toGraph
   , toGraph'
   , fromGraph
@@ -718,27 +717,22 @@ instance Hashable a => Hashable (Sig a)
 
 -- ------------------------------------------------------------------------
 
-type Graph = IntMap Node
-
-data Node
-  = NodeLeaf !Bool
-  | NodeBranch !Int Int Int
-  deriving (Eq, Show, Read)
+type Graph f = IntMap (f Int)
 
 -- | Convert a BDD into a pointed graph
-toGraph :: BDD a -> (Graph, Int)
+toGraph :: BDD a -> (Graph Sig, Int)
 toGraph bdd =
   case toGraph' (Identity bdd) of
     (g, Identity v) -> (g, v)
 
 -- | Convert multiple BDDs into a graph
-toGraph' :: Traversable t => t (BDD a) -> (Graph, t Int)
+toGraph' :: Traversable t => t (BDD a) -> (Graph Sig, t Int)
 toGraph' bs = runST $ do
   h <- C.newSized defaultTableSize
   H.insert h F 0
   H.insert h T 1
   counter <- newSTRef 2
-  ref <- newSTRef $ IntMap.fromList [(0, NodeLeaf False), (1, NodeLeaf True)]
+  ref <- newSTRef $ IntMap.fromList [(0, SLeaf False), (1, SLeaf True)]
 
   let f F = return 0
       f T = return 1
@@ -752,7 +746,7 @@ toGraph' bs = runST $ do
             n <- readSTRef counter
             writeSTRef counter $! n+1
             H.insert h p n
-            modifySTRef' ref (IntMap.insert n (NodeBranch x r0 r1))
+            modifySTRef' ref (IntMap.insert n (SBranch x r0 r1))
             return n
 
   vs <- mapM f bs
@@ -760,19 +754,19 @@ toGraph' bs = runST $ do
   return (g, vs)
 
 -- | Convert a pointed graph into a BDD
-fromGraph :: (Graph, Int) -> BDD a
+fromGraph :: (Graph Sig, Int) -> BDD a
 fromGraph (g, v) =
   case IntMap.lookup v (fromGraph' g) of
     Nothing -> error ("Data.DecisionDiagram.BDD.fromGraph: invalid node id " ++ show v)
     Just bdd -> bdd
 
 -- | Convert nodes of a graph into BDDs
-fromGraph' :: Graph -> IntMap (BDD a)
+fromGraph' :: Graph Sig -> IntMap (BDD a)
 fromGraph' g = ret
   where
     ret = IntMap.map f g
-    f (NodeLeaf b) = Leaf b
-    f (NodeBranch x lo hi) =
+    f (SLeaf b) = Leaf b
+    f (SBranch x lo hi) =
       case (IntMap.lookup lo ret, IntMap.lookup hi ret) of
         (Nothing, _) -> error ("Data.DecisionDiagram.BDD.fromGraph': invalid node id " ++ show lo)
         (_, Nothing) -> error ("Data.DecisionDiagram.BDD.fromGraph': invalid node id " ++ show hi)

@@ -110,7 +110,6 @@ module Data.DecisionDiagram.ZDD
 
   -- ** Conversion from/to graphs
   , Graph
-  , Node (..)
   , toGraph
   , toGraph'
   , fromGraph
@@ -793,28 +792,22 @@ instance Hashable a => Hashable (Sig a)
 
 -- ------------------------------------------------------------------------
 
-type Graph = IntMap Node
-
-data Node
-  = NodeEmpty
-  | NodeBase
-  | NodeBranch !Int Int Int
-  deriving (Eq, Show, Read)
+type Graph f = IntMap (f Int)
 
 -- | Convert a ZDD into a pointed graph
-toGraph :: ZDD a -> (Graph, Int)
+toGraph :: ZDD a -> (Graph Sig, Int)
 toGraph bdd =
   case toGraph' (Identity bdd) of
     (g, Identity v) -> (g, v)
 
 -- | Convert multiple ZDDs into a graph
-toGraph' :: Traversable t => t (ZDD a) -> (Graph, t Int)
+toGraph' :: Traversable t => t (ZDD a) -> (Graph Sig, t Int)
 toGraph' bs = runST $ do
   h <- C.newSized defaultTableSize
   H.insert h Empty 0
   H.insert h Base 1
   counter <- newSTRef 2
-  ref <- newSTRef $ IntMap.fromList [(0, NodeEmpty), (1, NodeBase)]
+  ref <- newSTRef $ IntMap.fromList [(0, SEmpty), (1, SBase)]
 
   let f Empty = return 0
       f Base = return 1
@@ -828,7 +821,7 @@ toGraph' bs = runST $ do
             n <- readSTRef counter
             writeSTRef counter $! n+1
             H.insert h p n
-            modifySTRef' ref (IntMap.insert n (NodeBranch x r0 r1))
+            modifySTRef' ref (IntMap.insert n (SBranch x r0 r1))
             return n
 
   vs <- mapM f bs
@@ -836,20 +829,20 @@ toGraph' bs = runST $ do
   return (g, vs)
 
 -- | Convert a pointed graph into a ZDD
-fromGraph :: (Graph, Int) -> ZDD a
+fromGraph :: (Graph Sig, Int) -> ZDD a
 fromGraph (g, v) =
   case IntMap.lookup v (fromGraph' g) of
     Nothing -> error ("Data.DecisionDiagram.ZDD.fromGraph: invalid node id " ++ show v)
     Just bdd -> bdd
 
 -- | Convert nodes of a graph into ZDDs
-fromGraph' :: Graph -> IntMap (ZDD a)
+fromGraph' :: Graph Sig -> IntMap (ZDD a)
 fromGraph' g = ret
   where
     ret = IntMap.map f g
-    f NodeEmpty = Empty
-    f NodeBase = Base
-    f (NodeBranch x lo hi) =
+    f SEmpty = Empty
+    f SBase = Base
+    f (SBranch x lo hi) =
       case (IntMap.lookup lo ret, IntMap.lookup hi ret) of
         (Nothing, _) -> error ("Data.DecisionDiagram.ZDD.fromGraph': invalid node id " ++ show lo)
         (_, Nothing) -> error ("Data.DecisionDiagram.ZDD.fromGraph': invalid node id " ++ show hi)
