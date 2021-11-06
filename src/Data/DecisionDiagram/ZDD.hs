@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
@@ -31,6 +32,7 @@ module Data.DecisionDiagram.ZDD
   (
   -- * ZDD type
     ZDD (Empty, Base, Branch)
+  , Sig (..)
 
   -- * Item ordering
   , ItemOrder (..)
@@ -775,6 +777,15 @@ findMaxSum weight =
       where
         w2' = w2 + weight x
         s2' = IntSet.insert x s2
+
+-- ------------------------------------------------------------------------
+
+-- | Signature functor of 'ZDD' type as a F-algebra and as a F-coalgebra.
+data Sig a
+  = SEmpty
+  | SBase
+  | SBranch !Int a a
+  deriving (Eq, Ord, Show, Read, Functor, Foldable, Traversable)
 
 -- ------------------------------------------------------------------------
 

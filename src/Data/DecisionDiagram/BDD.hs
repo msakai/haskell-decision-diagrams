@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
@@ -29,6 +30,7 @@ module Data.DecisionDiagram.BDD
   (
   -- * The BDD type
     BDD (Leaf, Branch)
+  , Sig (..)
 
   -- * Item ordering
   , ItemOrder (..)
@@ -701,6 +703,14 @@ substSet s m = runST $ do
           )
       where
         fixed = IntMap.mapMaybe asBool conditions
+
+-- ------------------------------------------------------------------------
+
+-- | Signature functor of 'BDD' type as a F-algebra and as a F-coalgebra.
+data Sig a
+  = SLeaf !Bool
+  | SBranch !Int a a
+  deriving (Eq, Ord, Show, Read, Functor, Foldable, Traversable)
 
 -- ------------------------------------------------------------------------
 
