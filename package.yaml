@@ -24,6 +24,13 @@ dependencies:
 - containers >=0.5.11.0 && <0.7
 - mwc-random >=0.13.6.0 && <0.16
 
+other-extensions:
+- BangPatterns
+- FlexibleContexts
+- FlexibleInstances
+- RankNTypes
+- ScopedTypeVariables
+
 library:
   source-dirs: src
   other-modules:
@@ -36,6 +43,15 @@ library:
   - random >=1.1 && <1.3
   - reflection >=2.1.4 && <2.2
   - unordered-containers >=0.2.9.0 && <0.3
+  other-extensions:
+  - CPP
+  - DeriveGeneric
+  - DeriveTraversable
+  - GeneralizedNewtypeDeriving
+  - PatternSynonyms
+  - TypeFamilies
+  - UndecidableInstances
+  - ViewPatterns
 
 tests:
   decision-diagrams-test:
@@ -53,3 +69,5 @@ tests:
     - tasty-hunit >=0.10.0.1 && <0.11
     - tasty-quickcheck >=0.10 && <0.11
     - tasty-th >=0.1.7 && <0.2
+    other-extensions:
+    - TemplateHaskell
