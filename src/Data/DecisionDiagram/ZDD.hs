@@ -607,7 +607,7 @@ isProperSubsetOf a b = a `isSubsetOf` b && a /= b
 disjoint :: ItemOrder a => ZDD a -> ZDD a -> Bool
 disjoint a b = null (a `intersection` b)
 
---- | Unions of all member sets
+-- | Unions of all member sets
 flatten :: ItemOrder a => ZDD a -> IntSet
 flatten = fold' IntSet.empty IntSet.empty (\top lo hi -> IntSet.insert top (lo `IntSet.union` hi))
 
