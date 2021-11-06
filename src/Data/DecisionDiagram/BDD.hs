@@ -707,8 +707,7 @@ substSet s m = runST $ do
 type Graph = IntMap Node
 
 data Node
-  = NodeF
-  | NodeT
+  = NodeLeaf !Bool
   | NodeBranch !Int Int Int
   deriving (Eq, Show, Read)
 
@@ -725,7 +724,7 @@ toGraph' bs = runST $ do
   H.insert h F 0
   H.insert h T 1
   counter <- newSTRef 2
-  ref <- newSTRef $ IntMap.fromList [(0, NodeF), (1, NodeT)]
+  ref <- newSTRef $ IntMap.fromList [(0, NodeLeaf False), (1, NodeLeaf True)]
 
   let f F = return 0
       f T = return 1
@@ -758,8 +757,7 @@ fromGraph' :: Graph -> IntMap (BDD a)
 fromGraph' g = ret
   where
     ret = IntMap.map f g
-    f NodeF = F
-    f NodeT = T
+    f (NodeLeaf b) = Leaf b
     f (NodeBranch x lo hi) =
       case (IntMap.lookup lo ret, IntMap.lookup hi ret) of
         (Nothing, _) -> error ("Data.DecisionDiagram.BDD.fromGraph': invalid node id " ++ show lo)
