@@ -467,8 +467,8 @@ existsUniqueSet vars bdd = runST $ do
 
 -- | Fold over the graph structure of the BDD.
 --
--- It takes values for substituting 'false' ('F') and 'true' ('T'),
--- and a function for substiting non-terminal node ('Branch').
+-- It takes values for substituting 'false' and 'true',
+-- and a function for substiting non-terminal nodes ('Branch').
 fold :: b -> b -> (Int -> b -> b -> b) -> BDD a -> b
 fold ff tt br bdd = runST $ do
   h <- C.newSized defaultTableSize
