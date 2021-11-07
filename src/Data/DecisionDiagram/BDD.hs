@@ -81,6 +81,10 @@ module Data.DecisionDiagram.BDD
   , fold
   , fold'
 
+  -- * Fixpoints
+  , lfp
+  , gfp
+
   -- * Conversion from/to graphs
   , Graph
   , toGraph
@@ -706,6 +710,28 @@ substSet s m = runST $ do
           )
       where
         fixed = IntMap.mapMaybe asBool conditions
+
+-- ------------------------------------------------------------------------
+
+-- | Least fixed point
+lfp :: ItemOrder a => (BDD a ->  BDD a) -> BDD a
+lfp f = go false
+  where
+    go curr
+      | curr == next = curr
+      | otherwise = go next
+      where
+        next = f curr
+
+-- | Greatest fixed point
+gfp :: ItemOrder a => (BDD a ->  BDD a) -> BDD a
+gfp f = go true
+  where
+    go curr
+      | curr == next = curr
+      | otherwise = go next
+      where
+        next = f curr
 
 -- ------------------------------------------------------------------------
 
