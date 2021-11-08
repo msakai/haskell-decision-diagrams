@@ -330,6 +330,33 @@ prop_subsets_size =
           a = ZDD.subsets xs
        in counterexample (show a) $ ZDD.size a === (2 :: Integer) ^ (IntSet.size xs)
 
+prop_combinations_are_combinations :: Property
+prop_combinations_are_combinations =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \xs ->
+      forAll arbitrary $ \(NonNegative k) ->
+        let a :: ZDD o
+            a = ZDD.combinations xs k
+         in counterexample (show a) $
+              QM.monadicIO $ do
+                unless (ZDD.null a) $ do
+                  ys <- QM.run $ do
+                    gen <- Rand.create
+                    ZDD.uniformM a gen
+                  QM.monitor $ counterexample $ show ys
+                  QM.assert $ ys `IntSet.isSubsetOf` xs
+                  QM.assert $ IntSet.size ys == k
+
+prop_combinations_size :: Property
+prop_combinations_size =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \xs ->
+      forAll arbitrary $ \(NonNegative k) ->
+        let a :: ZDD o
+            a = ZDD.combinations xs k
+            n = toInteger $ IntSet.size xs
+         in counterexample (show a) $ ZDD.size a === (product [(n - toInteger k + 1)..n] `div` (product [1..toInteger k]))
+
 prop_toList_fromList :: Property
 prop_toList_fromList =
   forAllItemOrder $ \(_ :: Proxy o) ->

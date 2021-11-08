@@ -49,6 +49,7 @@ module Data.DecisionDiagram.ZDD
   , base
   , singleton
   , subsets
+  , combinations
   , fromListOfIntSets
   , fromSetOfIntSets
 
@@ -147,6 +148,7 @@ import Data.Ratio
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.STRef
+import qualified Data.Vector as V
 import qualified GHC.Exts as Exts
 import GHC.Generics (Generic)
 import Numeric.Natural
@@ -252,6 +254,21 @@ subsets :: forall a. ItemOrder a => IntSet -> ZDD a
 subsets = foldl' f Base . sortBy (flip (compareItem (Proxy :: Proxy a))) . IntSet.toList
   where
     f zdd x = Branch x zdd zdd
+
+-- | Set of all k-combination of a set
+combinations :: forall a. ItemOrder a => IntSet -> Int -> ZDD a
+combinations xs k
+  | k < 0 = error "Data.DecisionDiagram.ZDD.combinations: negative size"
+  | otherwise = unfoldOrd f (0, k)
+  where
+    table = V.fromList $ sortBy (flip (compareItem (Proxy :: Proxy a))) $ IntSet.toList xs
+    n = V.length table
+
+    f :: (Int, Int) -> Sig (Int, Int)
+    f (!_, !0) = SBase
+    f (!i, !k')
+      | i + k' > n = SEmpty
+      | otherwise  = SBranch (table V.! i) (i+1, k') (i+1, k'-1)
 
 -- | Select subsets that contain a particular element and then remove the element from them
 subset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
