@@ -468,12 +468,12 @@ m1 \\ m2 = difference m1 m2
 -- Sometimes it is denoted as /P ↘ Q/.
 nonSuperset :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 nonSuperset zdd1 zdd2 = runST $ do
-  op <- mkNonSueprsetOp
+  op <- mkNonSupersetOp
   op zdd1 zdd2
 
-mkNonSueprsetOp :: forall a s. ItemOrder a => ST s (ZDD a -> ZDD a -> ST s (ZDD a))
-mkNonSueprsetOp = do
-  intersectionOp <- mkIntersectionOp 
+mkNonSupersetOp :: forall a s. ItemOrder a => ST s (ZDD a -> ZDD a -> ST s (ZDD a))
+mkNonSupersetOp = do
+  intersectionOp <- mkIntersectionOp
   h <- C.newSized defaultTableSize
   let f Empty _ = return Empty
       f _ Base = return Empty
@@ -499,7 +499,7 @@ mkNonSueprsetOp = do
 minimalHittingSetsKnuth' :: forall a. ItemOrder a => Bool -> ZDD a -> ZDD a
 minimalHittingSetsKnuth' imai zdd = runST $ do
   unionOp <- mkUnionOp
-  diffOp <- if imai then mkDifferenceOp else mkNonSueprsetOp
+  diffOp <- if imai then mkDifferenceOp else mkNonSupersetOp
   h <- C.newSized defaultTableSize
   let f Empty = return Base
       f Base = return Empty
