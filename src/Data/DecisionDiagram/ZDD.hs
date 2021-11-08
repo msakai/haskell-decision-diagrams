@@ -88,6 +88,10 @@ module Data.DecisionDiagram.ZDD
   , fold
   , fold'
 
+  -- * Unfold
+  , unfoldHashable
+  , unfoldOrd
+
   -- * Minimal hitting sets
   , minimalHittingSets
   , minimalHittingSetsToda
@@ -123,6 +127,7 @@ import Control.Monad
 import Control.Monad.Primitive
 #endif
 import Control.Monad.ST
+import qualified Data.Foldable as Foldable
 import Data.Functor.Identity
 import Data.Hashable
 import Data.HashMap.Lazy (HashMap)
@@ -134,6 +139,8 @@ import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List (foldl', sortBy)
+import Data.Map.Lazy (Map)
+import qualified Data.Map.Lazy as Map
 import Data.Maybe
 import Data.Proxy
 import Data.Ratio
@@ -679,6 +686,47 @@ fold' !ff !tt br zdd = runST $ do
             seq ret $ H.insert h p ret
             return ret
   f zdd
+
+-- ------------------------------------------------------------------------
+
+unfoldHashable :: forall a b. (ItemOrder a, Eq b, Hashable b) => (b -> Sig b) -> b -> ZDD a
+unfoldHashable f b = runST $ do
+  h <- C.newSized defaultTableSize
+  let g [] = return ()
+      g (x : xs) = do
+        r <- H.lookup h x
+        case r of
+          Just _ -> g xs
+          Nothing -> do
+            let fx = f x
+            H.insert h x fx
+            g (xs ++ Foldable.toList fx)
+  g [b]
+  xs <- H.toList h
+  let h2 = HashMap.fromList [(x, inSig (fmap (h2 HashMap.!) s)) | (x,s) <- xs]
+  return $ h2 HashMap.! b
+
+unfoldOrd :: forall a b. (ItemOrder a, Ord b) => (b -> Sig b) -> b -> ZDD a
+unfoldOrd f b = m2 Map.! b
+  where
+    m1 :: Map b (Sig b)
+    m1 = g Map.empty [b]
+
+    m2 :: Map b (ZDD a)
+    m2 = Map.map (inSig . fmap (m2 Map.!)) m1
+
+    g m [] = m
+    g m (x : xs) =
+      case Map.lookup x m of
+        Just _ -> g m xs
+        Nothing ->
+          let fx = f x
+           in g (Map.insert x fx m) (xs ++ Foldable.toList fx)
+
+inSig :: Sig (ZDD a) -> ZDD a
+inSig SEmpty = Empty
+inSig SBase = Base
+inSig (SBranch x lo hi) = Branch x lo hi
 
 -- ------------------------------------------------------------------------
 

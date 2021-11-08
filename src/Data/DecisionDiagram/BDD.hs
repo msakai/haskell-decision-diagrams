@@ -81,6 +81,10 @@ module Data.DecisionDiagram.BDD
   , fold
   , fold'
 
+  -- * Unfold
+  , unfoldHashable
+  , unfoldOrd
+
   -- * Conversion from/to graphs
   , Graph
   , toGraph
@@ -92,9 +96,11 @@ module Data.DecisionDiagram.BDD
 import Control.Exception (assert)
 import Control.Monad
 import Control.Monad.ST
+import qualified Data.Foldable as Foldable
 import Data.Function (on)
 import Data.Functor.Identity
 import Data.Hashable
+import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
 import Data.IntMap (IntMap)
@@ -102,6 +108,8 @@ import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List (sortBy)
+import Data.Map.Lazy (Map)
+import qualified Data.Map.Lazy as Map
 import Data.Proxy
 import Data.STRef
 import GHC.Generics (Generic)
@@ -513,6 +521,46 @@ mkFold'Op !ff !tt br = do
             seq ret $ H.insert h p ret
             return ret
   return f
+
+-- ------------------------------------------------------------------------
+
+unfoldHashable :: forall a b. (ItemOrder a, Eq b, Hashable b) => (b -> Sig b) -> b -> BDD a
+unfoldHashable f b = runST $ do
+  h <- C.newSized defaultTableSize
+  let g [] = return ()
+      g (x : xs) = do
+        r <- H.lookup h x
+        case r of
+          Just _ -> g xs
+          Nothing -> do
+            let fx = f x
+            H.insert h x fx
+            g (xs ++ Foldable.toList fx)
+  g [b]
+  xs <- H.toList h
+  let h2 = HashMap.fromList [(x, inSig (fmap (h2 HashMap.!) s)) | (x,s) <- xs]
+  return $ h2 HashMap.! b
+
+unfoldOrd :: forall a b. (ItemOrder a, Ord b) => (b -> Sig b) -> b -> BDD a
+unfoldOrd f b = m2 Map.! b
+  where
+    m1 :: Map b (Sig b)
+    m1 = g Map.empty [b]
+
+    m2 :: Map b (BDD a)
+    m2 = Map.map (inSig . fmap (m2 Map.!)) m1
+
+    g m [] = m
+    g m (x : xs) =
+      case Map.lookup x m of
+        Just _ -> g m xs
+        Nothing ->
+          let fx = f x
+           in g (Map.insert x fx m) (xs ++ Foldable.toList fx)
+
+inSig :: Sig (BDD a) -> BDD a
+inSig (SLeaf b) = Leaf b
+inSig (SBranch x lo hi) = Branch x lo hi
 
 -- ------------------------------------------------------------------------
 
