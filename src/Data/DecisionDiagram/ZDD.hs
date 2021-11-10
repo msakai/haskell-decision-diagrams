@@ -595,6 +595,16 @@ null = (empty ==)
 {-# SPECIALIZE size :: ZDD a -> Integer #-}
 {-# SPECIALIZE size :: ZDD a -> Natural #-}
 -- | The number of sets in the family.
+--
+-- Any 'Integral' type can be used as a result type, but it is recommended to use
+-- 'Integer' or 'Natural' because the size can be larger than @Int64@ for example:
+--
+-- >>> size (subsets (IntSet.fromList [1..128]) :: ZDD AscOrder) :: Integer
+-- 340282366920938463463374607431768211456
+-- >>> import Data.Int
+-- >>> maxBound :: Int64
+-- 9223372036854775807
+--
 size :: (Integral b) => ZDD a -> b
 size = fold' 0 1 (\_ n0 n1 -> n0 + n1)
 
