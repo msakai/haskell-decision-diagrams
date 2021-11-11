@@ -229,14 +229,23 @@ zddCase2 _ Empty Base = ZDDCase2EQ2 False True
 zddCase2 _ Empty Empty = ZDDCase2EQ2 False False
 
 -- | The empty set (∅).
+--
+-- >>> toSetOfIntSets (empty :: ZDD AscOrder)
+-- fromList []
 empty :: ZDD a
 empty = Empty
 
 -- | The set containing only the empty set ({∅}).
+--
+-- >>> toSetOfIntSets (base :: ZDD AscOrder)
+-- fromList [fromList []]
 base :: ZDD a
 base = Base
 
 -- | Create a ZDD that contains only a given set.
+--
+-- >>> toSetOfIntSets (singleton (IntSet.fromList [1,2,3]) :: ZDD AscOrder)
+-- fromList [fromList [1,2,3]]
 singleton :: forall a. ItemOrder a => IntSet -> ZDD a
 singleton xs = insert xs empty
 
@@ -247,6 +256,9 @@ subsets = foldl' f Base . sortBy (flip (compareItem (Proxy :: Proxy a))) . IntSe
     f zdd x = Branch x zdd zdd
 
 -- | Select subsets that contain a particular element and then remove the element from them
+--
+-- >>> toSetOfIntSets $ subset1 2 (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [2,4]]) :: ZDD AscOrder)
+-- fromList [fromList [1,3],fromList [4]]
 subset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 subset1 var zdd = runST $ do
   h <- C.newSized defaultTableSize
@@ -266,6 +278,9 @@ subset1 var zdd = runST $ do
   f zdd
 
 -- | Subsets that does not contain a particular element
+--
+-- >>> toSetOfIntSets $ subset0 2 (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [2,4], [3,4]]) :: ZDD AscOrder)
+-- fromList [fromList [1,3],fromList [3,4]]
 subset0 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 subset0 var zdd = runST $ do
   h <- C.newSized defaultTableSize
@@ -285,6 +300,9 @@ subset0 var zdd = runST $ do
   f zdd
 
 -- | Insert a set into the ZDD.
+--
+-- >>> toSetOfIntSets (insert (IntSet.fromList [1,2,3]) (fromListOfIntSets (map IntSet.fromList [[1,3], [2,4]])) :: ZDD AscOrder)
+-- fromList [fromList [1,2,3],fromList [1,3],fromList [2,4]]
 insert :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
 insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
@@ -300,6 +318,9 @@ insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
         EQ -> Branch top p0 (f ys p1)
 
 -- | Delete a set from the ZDD.
+--
+-- >>> toSetOfIntSets (delete (IntSet.fromList [1,3]) (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [2,4]])) :: ZDD AscOrder)
+-- fromList [fromList [1,2,3],fromList [2,4]]
 delete :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
 delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
