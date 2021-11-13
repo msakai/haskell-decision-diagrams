@@ -631,7 +631,11 @@ fromListOfIntSets = fromListOfSortedList . map f
 
 -- | Convert the family to a list of 'IntSet'.
 toListOfIntSets :: ZDD a -> [IntSet]
-toListOfIntSets = fold' [] [IntSet.empty] (\top lo hi -> lo <> map (IntSet.insert top) hi)
+toListOfIntSets = g . fold' (False,[]) (True,[]) f
+  where
+    f top (b, xss) hi = (b, map (IntSet.insert top) (g hi) <> xss)
+    g (True, xss) = IntSet.empty : xss
+    g (False, xss) = xss
 
 fromListOfSortedList :: forall a. ItemOrder a => [[Int]] -> ZDD a
 fromListOfSortedList = unions . map f

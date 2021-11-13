@@ -23,6 +23,7 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import Test.Tasty.TH
 
+import Data.DecisionDiagram.BDD.Internal.ItemOrder (OrderedItem (..))
 import Data.DecisionDiagram.ZDD (ZDD (..), ItemOrder (..))
 import qualified Data.DecisionDiagram.ZDD as ZDD
 
@@ -336,6 +337,14 @@ case_toList_lazyness = do
   let xss :: ZDD ZDD.AscOrder
       xss = ZDD.subsets (IntSet.fromList [1..128])
   deepseq (take 100 (Exts.toList xss)) $ return ()
+
+prop_toList_sorted :: Property
+prop_toList_sorted =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(xss :: ZDD o) ->
+      let yss :: [[OrderedItem o]]
+          yss = map (sort . map OrderedItem . IntSet.toList) $ take 100 $ Exts.toList xss
+       in yss ===  sort yss
 
 prop_toList_fromList :: Property
 prop_toList_fromList =
