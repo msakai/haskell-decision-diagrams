@@ -20,7 +20,7 @@ category:            Data, Logic
 description:         Please see the README on GitHub at <https://github.com/msakai/haskell-decision-diagrams#readme>
 
 dependencies:
-- base >= 4.7 && <5
+- base >=4.11.0.0 && <5
 - containers >=0.5.11.0 && <0.7
 - mwc-random >=0.13.6.0 && <0.16
 

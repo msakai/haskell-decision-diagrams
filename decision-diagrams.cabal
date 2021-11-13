@@ -49,7 +49,7 @@ library
       UndecidableInstances
       ViewPatterns
   build-depends:
-      base >=4.7 && <5
+      base >=4.11.0.0 && <5
     , containers >=0.5.11.0 && <0.7
     , hashable >=1.2.7.0 && <1.5
     , hashtables >=1.2.3.1 && <1.3
@@ -81,7 +81,7 @@ test-suite decision-diagrams-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck >=2.11.3 && <2.15
-    , base >=4.7 && <5
+    , base >=4.11.0.0 && <5
     , containers >=0.5.11.0 && <0.7
     , decision-diagrams
     , deepseq >=1.4.3.0 && <1.5
