@@ -25,6 +25,9 @@ module Data.DecisionDiagram.BDD.Internal.ItemOrder
   , withDescOrder
   , withCustomOrder
 
+  -- * Ordered item
+  , OrderedItem (..)
+
   -- * Level
   , Level (..)
   ) where
@@ -64,6 +67,14 @@ withDefaultOrder k = k (Proxy :: Proxy AscOrder)
 
 withCustomOrder :: forall r. (Int -> Int -> Ordering) -> (forall a. ItemOrder a => Proxy a -> r) -> r
 withCustomOrder cmp k = reify cmp (\(_ :: Proxy s) -> k (Proxy :: Proxy (CustomOrder s)))
+
+-- ------------------------------------------------------------------------
+
+newtype OrderedItem a = OrderedItem Int
+  deriving (Eq, Show)
+
+instance ItemOrder a => Ord (OrderedItem a) where
+  compare (OrderedItem x) (OrderedItem y) = compareItem (Proxy :: Proxy a) x y
 
 -- ------------------------------------------------------------------------
 

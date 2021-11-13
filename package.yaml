@@ -63,6 +63,7 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - decision-diagrams
+    - deepseq >=1.4.3.0 && <1.5
     - QuickCheck >=2.11.3 && <2.15
     - statistics >=0.14.0.2 && <0.16
     - tasty >=1.1.0.4 && <1.5
