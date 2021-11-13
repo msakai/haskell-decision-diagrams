@@ -5,6 +5,7 @@ module TestZDD (zddTestGroup) where
 
 import Control.DeepSeq
 import Control.Monad
+import Control.Monad.ST
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List
@@ -12,12 +13,14 @@ import qualified Data.Map.Strict as Map
 import Data.Proxy
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Vector (Vector)
+import Data.Word
 import qualified GHC.Exts as Exts
 import Statistics.Distribution
 import Statistics.Distribution.ChiSquared (chiSquared)
 import qualified System.Random.MWC as Rand
 import Test.QuickCheck.Function (apply)
-import qualified Test.QuickCheck.Monadic as QM
+import Test.QuickCheck.Instances.Vector ()
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
@@ -533,20 +536,20 @@ prop_uniformM :: Property
 prop_uniformM =
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll (arbitrary `suchThat` ((>= (2::Integer)) . ZDD.size)) $ \(a :: ZDD o) ->
-      QM.monadicIO $ do
-        gen <- QM.run Rand.create
+      forAll arbitrary $ \(seed :: Vector Word32) ->
         let m :: Integer
             m = ZDD.size a
             n = 1000
-        samples <- QM.run $ replicateM n $ ZDD.uniformM a gen
-        let hist_actual = Map.fromListWith (+) [(s, 1) | s <- samples]
+            samples = runST $ do
+              gen <- Rand.initialize seed
+              replicateM n $ ZDD.uniformM a gen
+            hist_actual = Map.fromListWith (+) [(s, 1) | s <- samples]
             hist_expected = [(s, fromIntegral n / fromIntegral m) | s <- ZDD.toListOfIntSets a]
             chi_sq = sum [(Map.findWithDefault 0 s hist_actual - cnt) ** 2 / cnt | (s, cnt) <- hist_expected]
             threshold = complQuantile (chiSquared (fromIntegral m - 1)) 0.001
-        QM.monitor $ counterexample $ show hist_actual ++ " /= " ++ show (Map.fromList hist_expected)
-        QM.assert $ and [xs `ZDD.member` a | xs <- Map.keys hist_actual]
-        QM.monitor $ counterexample $ "χ² = " ++ show chi_sq ++ " >= " ++ show threshold
-        QM.assert $ chi_sq < threshold
+         in counterexample (show hist_actual ++ " /= " ++ show (Map.fromList hist_expected)) $
+              and [xs `ZDD.member` a | xs <- Map.keys hist_actual] .&&.
+              counterexample ("χ² = " ++ show chi_sq ++ " >= " ++ show threshold) (chi_sq < threshold)
 
 prop_findMinSum :: Property
 prop_findMinSum =
