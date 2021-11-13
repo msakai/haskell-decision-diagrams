@@ -3,6 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module TestZDD (zddTestGroup) where
 
+import Control.DeepSeq
 import Control.Monad
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
@@ -329,6 +330,12 @@ prop_subsets_size =
       let a :: ZDD o
           a = ZDD.subsets xs
        in counterexample (show a) $ ZDD.size a === (2 :: Integer) ^ (IntSet.size xs)
+
+case_toList_lazyness :: Assertion
+case_toList_lazyness = do
+  let xss :: ZDD ZDD.AscOrder
+      xss = ZDD.subsets (IntSet.fromList [1..128])
+  deepseq (take 100 (Exts.toList xss)) $ return ()
 
 prop_toList_fromList :: Property
 prop_toList_fromList =
