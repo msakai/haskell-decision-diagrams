@@ -496,6 +496,9 @@ m1 \\ m2 = difference m1 m2
 -- | Given a family P and Q, it computes {S∈P | ∀X∈Q. X⊈S}
 --
 -- Sometimes it is denoted as /P ↘ Q/.
+--
+-- >>> toSetOfIntSets (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [3,4]]) `nonSuperset` singleton (IntSet.fromList [1,3]) :: ZDD AscOrder)
+-- fromList [fromList [3,4]]
 nonSuperset :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 nonSuperset zdd1 zdd2 = runST $ do
   op <- mkNonSueprsetOp
@@ -654,6 +657,9 @@ disjoint :: ItemOrder a => ZDD a -> ZDD a -> Bool
 disjoint a b = null (a `intersection` b)
 
 -- | Unions of all member sets
+--
+-- >>> flatten (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [3,4]]) :: ZDD AscOrder)
+-- fromList [1,2,3,4]
 flatten :: ItemOrder a => ZDD a -> IntSet
 flatten = fold' IntSet.empty IntSet.empty (\top lo hi -> IntSet.insert top (lo `IntSet.union` hi))
 
