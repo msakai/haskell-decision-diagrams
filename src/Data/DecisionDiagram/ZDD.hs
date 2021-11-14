@@ -261,7 +261,7 @@ combinations xs k
   | k < 0 = error "Data.DecisionDiagram.ZDD.combinations: negative size"
   | otherwise = unfoldOrd f (0, k)
   where
-    table = V.fromList $ sortBy (flip (compareItem (Proxy :: Proxy a))) $ IntSet.toList xs
+    table = V.fromList $ sortBy (compareItem (Proxy :: Proxy a)) $ IntSet.toList xs
     n = V.length table
 
     f :: (Int, Int) -> Sig (Int, Int)
