@@ -21,7 +21,6 @@ import Statistics.Distribution.ChiSquared (chiSquared)
 import qualified System.Random.MWC as Rand
 import Test.QuickCheck.Function (apply)
 import Test.QuickCheck.Instances.Vector ()
-import qualified Test.QuickCheck.Monadic as QM
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
@@ -60,6 +59,13 @@ instance ZDD.ItemOrder a => Arbitrary (ZDD a) where
     [ ZDD.Branch x p0' p1'
     | (p0', p1') <- shrink (p0, p1), p1' /= ZDD.empty
     ]
+
+arbitraryMember :: ZDD.ItemOrder a => ZDD a -> Gen IntSet
+arbitraryMember zdd = do
+  (seed :: Vector Word32) <- arbitrary
+  return $ runST $ do
+    gen <- Rand.initialize seed
+    ZDD.uniformM zdd gen
 
 -- ------------------------------------------------------------------------
 -- Union
@@ -344,14 +350,9 @@ prop_combinations_are_combinations =
         let a :: ZDD o
             a = ZDD.combinations xs k
          in counterexample (show a) $
-              QM.monadicIO $ do
-                unless (ZDD.null a) $ do
-                  ys <- QM.run $ do
-                    gen <- Rand.create
-                    ZDD.uniformM a gen
-                  QM.monitor $ counterexample $ show ys
-                  QM.assert $ ys `IntSet.isSubsetOf` xs
-                  QM.assert $ IntSet.size ys == k
+              not (ZDD.null a)
+              ==>
+              (forAll (arbitraryMember a) $ \ys -> (ys `IntSet.isSubsetOf` xs) .&&. (IntSet.size ys === k))
 
 prop_combinations_size :: Property
 prop_combinations_size =
