@@ -229,14 +229,23 @@ zddCase2 _ Empty Base = ZDDCase2EQ2 False True
 zddCase2 _ Empty Empty = ZDDCase2EQ2 False False
 
 -- | The empty set (∅).
+--
+-- >>> toSetOfIntSets (empty :: ZDD AscOrder)
+-- fromList []
 empty :: ZDD a
 empty = Empty
 
 -- | The set containing only the empty set ({∅}).
+--
+-- >>> toSetOfIntSets (base :: ZDD AscOrder)
+-- fromList [fromList []]
 base :: ZDD a
 base = Base
 
 -- | Create a ZDD that contains only a given set.
+--
+-- >>> toSetOfIntSets (singleton (IntSet.fromList [1,2,3]) :: ZDD AscOrder)
+-- fromList [fromList [1,2,3]]
 singleton :: forall a. ItemOrder a => IntSet -> ZDD a
 singleton xs = insert xs empty
 
@@ -247,6 +256,9 @@ subsets = foldl' f Base . sortBy (flip (compareItem (Proxy :: Proxy a))) . IntSe
     f zdd x = Branch x zdd zdd
 
 -- | Select subsets that contain a particular element and then remove the element from them
+--
+-- >>> toSetOfIntSets $ subset1 2 (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [2,4]]) :: ZDD AscOrder)
+-- fromList [fromList [1,3],fromList [4]]
 subset1 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 subset1 var zdd = runST $ do
   h <- C.newSized defaultTableSize
@@ -266,6 +278,9 @@ subset1 var zdd = runST $ do
   f zdd
 
 -- | Subsets that does not contain a particular element
+--
+-- >>> toSetOfIntSets $ subset0 2 (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [2,4], [3,4]]) :: ZDD AscOrder)
+-- fromList [fromList [1,3],fromList [3,4]]
 subset0 :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 subset0 var zdd = runST $ do
   h <- C.newSized defaultTableSize
@@ -285,6 +300,9 @@ subset0 var zdd = runST $ do
   f zdd
 
 -- | Insert a set into the ZDD.
+--
+-- >>> toSetOfIntSets (insert (IntSet.fromList [1,2,3]) (fromListOfIntSets (map IntSet.fromList [[1,3], [2,4]])) :: ZDD AscOrder)
+-- fromList [fromList [1,2,3],fromList [1,3],fromList [2,4]]
 insert :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
 insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
@@ -300,6 +318,9 @@ insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
         EQ -> Branch top p0 (f ys p1)
 
 -- | Delete a set from the ZDD.
+--
+-- >>> toSetOfIntSets (delete (IntSet.fromList [1,3]) (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [2,4]])) :: ZDD AscOrder)
+-- fromList [fromList [1,2,3],fromList [2,4]]
 delete :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
 delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
@@ -315,6 +336,9 @@ delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
         EQ -> Branch top p0 (f ys p1)
 
 -- | Insert an item into each element set of ZDD.
+--
+-- >>> toSetOfIntSets (mapInsert 2 (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [1,4]])) :: ZDD AscOrder)
+-- fromList [fromList [1,2,3],fromList [1,2,4]]
 mapInsert :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 mapInsert var zdd = runST $ do
   unionOp <- mkUnionOp
@@ -335,6 +359,9 @@ mapInsert var zdd = runST $ do
   f zdd
 
 -- | Delete an item from each element set of ZDD.
+--
+-- >>> toSetOfIntSets (mapDelete 2 (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [1,2,4]])) :: ZDD AscOrder)
+-- fromList [fromList [1,3],fromList [1,4]]
 mapDelete :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 mapDelete var zdd = runST $ do
   unionOp <- mkUnionOp
@@ -355,6 +382,9 @@ mapDelete var zdd = runST $ do
   f zdd
 
 -- | @change x p@ returns {if x∈s then s∖{x} else s∪{x} | s∈P}
+--
+-- >>> toSetOfIntSets (change 2 (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [1,2,4]])) :: ZDD AscOrder)
+-- fromList [fromList [1,2,3],fromList [1,3],fromList [1,4]]
 change :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 change var zdd = runST $ do
   h <- C.newSized defaultTableSize
@@ -466,6 +496,9 @@ m1 \\ m2 = difference m1 m2
 -- | Given a family P and Q, it computes {S∈P | ∀X∈Q. X⊈S}
 --
 -- Sometimes it is denoted as /P ↘ Q/.
+--
+-- >>> toSetOfIntSets (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [3,4]]) `nonSuperset` singleton (IntSet.fromList [1,3]) :: ZDD AscOrder)
+-- fromList [fromList [3,4]]
 nonSuperset :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 nonSuperset zdd1 zdd2 = runST $ do
   op <- mkNonSupersetOp
@@ -564,6 +597,9 @@ minimal bdd = runST $ do
   f bdd
 
 -- | See 'minimalHittingSetsToda'.
+--
+-- >>> toSetOfIntSets (minimalHittingSets (fromListOfIntSets (map IntSet.fromList [[1], [2,3,5], [2,3,6], [2,4,5], [2,4,6]]) :: ZDD AscOrder))
+-- fromList [fromList [1,2],fromList [1,3,4],fromList [1,5,6]]
 minimalHittingSets :: forall a. ItemOrder a => ZDD a -> ZDD a
 minimalHittingSets = minimalHittingSetsToda
 
@@ -595,6 +631,16 @@ null = (empty ==)
 {-# SPECIALIZE size :: ZDD a -> Integer #-}
 {-# SPECIALIZE size :: ZDD a -> Natural #-}
 -- | The number of sets in the family.
+--
+-- Any 'Integral' type can be used as a result type, but it is recommended to use
+-- 'Integer' or 'Natural' because the size can be larger than @Int64@ for example:
+--
+-- >>> size (subsets (IntSet.fromList [1..128]) :: ZDD AscOrder) :: Integer
+-- 340282366920938463463374607431768211456
+-- >>> import Data.Int
+-- >>> maxBound :: Int64
+-- 9223372036854775807
+--
 size :: (Integral b) => ZDD a -> b
 size = fold' 0 1 (\_ n0 n1 -> n0 + n1)
 
@@ -611,6 +657,9 @@ disjoint :: ItemOrder a => ZDD a -> ZDD a -> Bool
 disjoint a b = null (a `intersection` b)
 
 -- | Unions of all member sets
+--
+-- >>> flatten (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [3,4]]) :: ZDD AscOrder)
+-- fromList [1,2,3,4]
 flatten :: ItemOrder a => ZDD a -> IntSet
 flatten = fold' IntSet.empty IntSet.empty (\top lo hi -> IntSet.insert top (lo `IntSet.union` hi))
 
@@ -771,6 +820,9 @@ findMinSum weight =
 -- \[
 -- \max_{X\in S} \sum_{x\in X} w(x)
 -- \]
+--
+-- >>> findMaxSum (IntMap.fromList [(1,2),(2,4),(3,-3)] IntMap.!) (fromListOfIntSets (map IntSet.fromList [[1], [2], [3], [1,2,3]]) :: ZDD AscOrder)
+-- (4,fromList [2])
 findMaxSum :: forall a w. (ItemOrder a, Num w, Ord w) => (Int -> w) -> ZDD a -> (w, IntSet)
 findMaxSum weight =
   fromMaybe (error "Data.DecisionDiagram.ZDD.findMinSum: empty ZDD") .
