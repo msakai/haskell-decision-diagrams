@@ -214,7 +214,7 @@ instance ItemOrder a => Exts.IsList (ZDD a) where
       f :: IntSet -> [Int]
       f = sortBy (compareItem (Proxy :: Proxy a)) . IntSet.toList
 
-  toList = fold' [] [IntSet.empty] (\top lo hi -> lo <> map (IntSet.insert top) hi)
+  toList = toListOfIntSets
 
 -- ------------------------------------------------------------------------
 
@@ -492,12 +492,12 @@ m1 \\ m2 = difference m1 m2
 -- Sometimes it is denoted as /P ↘ Q/.
 nonSuperset :: forall a. ItemOrder a => ZDD a -> ZDD a -> ZDD a
 nonSuperset zdd1 zdd2 = runST $ do
-  op <- mkNonSueprsetOp
+  op <- mkNonSupersetOp
   op zdd1 zdd2
 
-mkNonSueprsetOp :: forall a s. ItemOrder a => ST s (ZDD a -> ZDD a -> ST s (ZDD a))
-mkNonSueprsetOp = do
-  intersectionOp <- mkIntersectionOp 
+mkNonSupersetOp :: forall a s. ItemOrder a => ST s (ZDD a -> ZDD a -> ST s (ZDD a))
+mkNonSupersetOp = do
+  intersectionOp <- mkIntersectionOp
   h <- C.newSized defaultTableSize
   let f Empty _ = return Empty
       f _ Base = return Empty
@@ -523,7 +523,7 @@ mkNonSueprsetOp = do
 minimalHittingSetsKnuth' :: forall a. ItemOrder a => Bool -> ZDD a -> ZDD a
 minimalHittingSetsKnuth' imai zdd = runST $ do
   unionOp <- mkUnionOp
-  diffOp <- if imai then mkDifferenceOp else mkNonSueprsetOp
+  diffOp <- if imai then mkDifferenceOp else mkNonSupersetOp
   h <- C.newSized defaultTableSize
   let f Empty = return Base
       f Base = return Empty
@@ -655,7 +655,11 @@ fromListOfIntSets = fromListOfSortedList . map f
 
 -- | Convert the family to a list of 'IntSet'.
 toListOfIntSets :: ZDD a -> [IntSet]
-toListOfIntSets = fold [] [IntSet.empty] (\top lo hi -> lo <> map (IntSet.insert top) hi)
+toListOfIntSets = g . fold' (False,[]) (True,[]) f
+  where
+    f top (b, xss) hi = (b, map (IntSet.insert top) (g hi) <> xss)
+    g (True, xss) = IntSet.empty : xss
+    g (False, xss) = xss
 
 fromListOfSortedList :: forall a. ItemOrder a => [[Int]] -> ZDD a
 fromListOfSortedList = unions . map f

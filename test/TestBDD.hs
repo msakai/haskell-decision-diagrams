@@ -840,6 +840,73 @@ case_substSet_case_2 = do
 
 -- ------------------------------------------------------------------------
 
+data MonotoneExpr a
+  = MVar a
+  | MAnd (MonotoneExpr a) (MonotoneExpr a)
+  | MOr (MonotoneExpr a) (MonotoneExpr a)
+  | MConst Bool
+  deriving (Show)
+
+arbitraryMonotoneExpr :: forall a. Gen a -> Gen (MonotoneExpr a)
+arbitraryMonotoneExpr gen = sized f
+  where
+    f :: Int -> Gen (MonotoneExpr a)
+    f n = oneof $
+      [ liftM MConst arbitrary
+      , liftM MVar gen
+      ]
+      ++
+      concat
+      [ [liftM2 MAnd sub sub, liftM2 MOr sub sub]
+      | n > 0, let sub = f (n `div` 2)
+      ]
+
+evalMonotoneExpr :: ItemOrder a => (b -> BDD a) -> MonotoneExpr b -> BDD a
+evalMonotoneExpr f = g
+  where
+    g (MVar a) = f a
+    g (MConst v) = BDD.Leaf v
+    g (MOr a b) = g a BDD..||. g b
+    g (MAnd a b) = g a BDD..&&. g b
+
+forAllMonotonicFunction :: forall o prop. (ItemOrder o, Testable prop) => IntSet -> ((BDD o -> BDD o) -> prop) -> Property
+forAllMonotonicFunction xs k =
+  forAll (arbitraryMonotoneExpr (elements (Nothing : map Just (IntSet.toList xs)))) $ \e -> do
+    let f :: BDD o -> BDD o
+        f x = evalMonotoneExpr g e
+          where
+            g Nothing = x
+            g (Just v) = BDD.var v
+     in k f
+
+prop_lfp_is_fixed_point :: Property
+prop_lfp_is_fixed_point =
+ forAll arbitrary $ \(xs :: IntSet) ->
+   forAllItemOrder $ \(_ :: Proxy o) ->
+     forAllMonotonicFunction xs $ \(f :: BDD o -> BDD o) -> do
+       let a = BDD.lfp f
+        in counterexample (show a) $ f a === a
+
+
+prop_gfp_is_fixed_point :: Property
+prop_gfp_is_fixed_point =
+ forAll arbitrary $ \(xs :: IntSet) ->
+   forAllItemOrder $ \(_ :: Proxy o) ->
+     forAllMonotonicFunction xs $ \(f :: BDD o -> BDD o) -> do
+       let a = BDD.gfp f
+        in counterexample (show a) $ f a === a
+
+prop_lfp_imply_gfp :: Property
+prop_lfp_imply_gfp =
+ forAll arbitrary $ \(xs :: IntSet) ->
+   forAllItemOrder $ \(_ :: Proxy o) ->
+     forAllMonotonicFunction xs $ \(f :: BDD o -> BDD o) -> do
+       let a = BDD.lfp f
+           b = BDD.gfp f
+        in counterexample (show (a, b)) $ (a BDD..=>. b) === BDD.true
+
+-- ------------------------------------------------------------------------
+
 prop_toGraph_fromGraph :: Property
 prop_toGraph_fromGraph = do
   forAllItemOrder $ \(_ :: Proxy o) ->
