@@ -21,6 +21,7 @@ import Statistics.Distribution.ChiSquared (chiSquared)
 import qualified System.Random.MWC as Rand
 import Test.QuickCheck.Function (apply)
 import Test.QuickCheck.Instances.Vector ()
+import qualified Test.QuickCheck.Monadic as QM
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
