@@ -180,6 +180,11 @@ pattern Branch x lo hi <- ZDD (Node.Branch x (ZDD -> lo) (ZDD -> hi)) where
 
 {-# COMPLETE Empty, Base, Branch #-}
 
+-- Hack for avoiding spurious incomplete patterns warning on the above Branch pattern definition.
+#if __GLASGOW_HASKELL__ < 810
+{-# COMPLETE ZDD #-}
+#endif
+
 nodeId :: ZDD a -> Int
 nodeId (ZDD node) = Node.nodeId node
 
