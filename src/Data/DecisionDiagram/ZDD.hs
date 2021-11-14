@@ -816,6 +816,9 @@ findMinSum weight =
 -- \[
 -- \max_{X\in S} \sum_{x\in X} w(x)
 -- \]
+--
+-- >>> findMaxSum (IntMap.fromList [(1,2),(2,4),(3,-3)] IntMap.!) (fromListOfIntSets (map IntSet.fromList [[1], [2], [3], [1,2,3]]) :: ZDD AscOrder)
+-- (4,fromList [2])
 findMaxSum :: forall a w. (ItemOrder a, Num w, Ord w) => (Int -> w) -> ZDD a -> (w, IntSet)
 findMaxSum weight =
   fromMaybe (error "Data.DecisionDiagram.ZDD.findMinSum: empty ZDD") .
