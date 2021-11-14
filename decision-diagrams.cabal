@@ -74,7 +74,7 @@ test-suite decision-diagrams-doctest
       ScopedTypeVariables
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      base >=4.11.0.0 && <5
     , containers >=0.5.11.0 && <0.7
     , decision-diagrams
     , doctest
