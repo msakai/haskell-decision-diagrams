@@ -336,6 +336,9 @@ delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
         EQ -> Branch top p0 (f ys p1)
 
 -- | Insert an item into each element set of ZDD.
+--
+-- >>> toSetOfIntSets (mapInsert 2 (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [1,4]])) :: ZDD AscOrder)
+-- fromList [fromList [1,2,3],fromList [1,2,4]]
 mapInsert :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 mapInsert var zdd = runST $ do
   unionOp <- mkUnionOp
@@ -356,6 +359,9 @@ mapInsert var zdd = runST $ do
   f zdd
 
 -- | Delete an item from each element set of ZDD.
+--
+-- >>> toSetOfIntSets (mapDelete 2 (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [1,2,4]])) :: ZDD AscOrder)
+-- fromList [fromList [1,3],fromList [1,4]]
 mapDelete :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 mapDelete var zdd = runST $ do
   unionOp <- mkUnionOp
@@ -376,6 +382,9 @@ mapDelete var zdd = runST $ do
   f zdd
 
 -- | @change x p@ returns {if x∈s then s∖{x} else s∪{x} | s∈P}
+--
+-- >>> toSetOfIntSets (change 2 (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [1,2,4]])) :: ZDD AscOrder)
+-- fromList [fromList [1,2,3],fromList [1,3],fromList [1,4]]
 change :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 change var zdd = runST $ do
   h <- C.newSized defaultTableSize
@@ -585,6 +594,9 @@ minimal bdd = runST $ do
   f bdd
 
 -- | See 'minimalHittingSetsToda'.
+--
+-- >>> toSetOfIntSets (minimalHittingSets (fromListOfIntSets (map IntSet.fromList [[1], [2,3,5], [2,3,6], [2,4,5], [2,4,6]]) :: ZDD AscOrder))
+-- fromList [fromList [1,2],fromList [1,3,4],fromList [1,5,6]]
 minimalHittingSets :: forall a. ItemOrder a => ZDD a -> ZDD a
 minimalHittingSets = minimalHittingSetsToda
 
