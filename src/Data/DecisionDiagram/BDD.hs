@@ -56,6 +56,12 @@ module Data.DecisionDiagram.BDD
   , andB
   , orB
 
+  -- * Pseudo-boolean constraints
+  , pbAtLeast
+  , pbAtMost
+  , pbExactly
+  , pbExactlyIntegral
+
   -- * Quantification
   , forAll
   , exists
@@ -116,6 +122,7 @@ import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import Data.Proxy
 import Data.STRef
+import qualified Data.Vector as V
 import GHC.Generics (Generic)
 import Text.Read
 
@@ -352,6 +359,88 @@ orB :: forall f a. (Foldable f, ItemOrder a) => f (BDD a) -> BDD a
 orB xs = runST $ do
   op <- mkOrOp
   foldM op false xs
+
+-- ------------------------------------------------------------------------
+
+-- | Pseudo-boolean constraint, /w1*x1 + w2*x2 + … ≥ k/.
+pbAtLeast :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> BDD a
+pbAtLeast xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (k <= ub) = SLeaf False
+      | i == V.length xs' && 0 >= k = SLeaf True
+      | lb >= k = SLeaf True -- all remaining variables are don't-care
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+
+-- | Pseudo-boolean constraint, /w1*x1 + w2*x2 + … ≤ k/.
+pbAtMost :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> BDD a
+pbAtMost xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (lb <= k) = SLeaf False
+      | i == V.length xs' && 0 <= k = SLeaf True
+      | ub <= k = SLeaf True -- all remaining variables are don't-care
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+
+-- | Pseudo-boolean constraint, /w1*x1 + w2*x2 + … = k/.
+--
+-- If weight type is 'Integral', 'pbExactlyIntegral' is more efficient.
+pbExactly :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> BDD a
+pbExactly xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (lb <= k && k <= ub) = SLeaf False
+      | i == V.length xs' && 0 == k = SLeaf True
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+
+-- | Similar to 'pbExactly' but more efficient.
+pbExactlyIntegral :: forall a w. (ItemOrder a, Real w, Integral w) => IntMap w -> w -> BDD a
+pbExactlyIntegral xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+    ds :: V.Vector w
+    ds = V.scanr1 (\w d -> if w /= 0 then gcd w d else d) (V.map snd xs')
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (lb <= k && k <= ub) = SLeaf False
+      | i == V.length xs' && 0 == k = SLeaf True
+      | d /= 0 && k `mod` d /= 0 = SLeaf False
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+        d = ds V.! i
 
 -- ------------------------------------------------------------------------
 
