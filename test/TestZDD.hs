@@ -6,6 +6,8 @@ module TestZDD (zddTestGroup) where
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.ST
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List
@@ -59,6 +61,13 @@ instance ZDD.ItemOrder a => Arbitrary (ZDD a) where
     [ ZDD.Branch x p0' p1'
     | (p0', p1') <- shrink (p0, p1), p1' /= ZDD.empty
     ]
+
+arbitraryMember :: ZDD.ItemOrder a => ZDD a -> Gen IntSet
+arbitraryMember zdd = do
+  (seed :: Vector Word32) <- arbitrary
+  return $ runST $ do
+    gen <- Rand.initialize seed
+    ZDD.uniformM zdd gen
 
 -- ------------------------------------------------------------------------
 -- Union
@@ -334,6 +343,96 @@ prop_subsets_size =
       let a :: ZDD o
           a = ZDD.subsets xs
        in counterexample (show a) $ ZDD.size a === (2 :: Integer) ^ (IntSet.size xs)
+
+prop_subsetsAtLeast :: Property
+prop_subsetsAtLeast =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntMap $ \(xs :: IntMap Integer) ->
+      forAll arbitrary $ \k ->
+        let a :: ZDD o
+            a = ZDD.subsetsAtLeast xs k
+         in counterexample (show a) $
+              if ZDD.null a then
+                property (k > sum [max 0 w | (_,w) <- IntMap.toList xs])
+              else
+                forAll (arbitraryMember a) $ \ys ->
+                  (ys `IntSet.isSubsetOf` IntMap.keysSet xs)
+                  .&&.
+                  sum [xs IntMap.! y | y <- IntSet.toList ys] >= k
+
+prop_subsetsAtMost :: Property
+prop_subsetsAtMost =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntMap $ \(xs :: IntMap Integer) ->
+      forAll arbitrary $ \k ->
+        let a :: ZDD o
+            a = ZDD.subsetsAtMost xs k
+         in counterexample (show a) $
+              if ZDD.null a then
+                property (k < sum [min 0 w | (_,w) <- IntMap.toList xs])
+              else
+                forAll (arbitraryMember a) $ \ys ->
+                  (ys `IntSet.isSubsetOf` IntMap.keysSet xs)
+                  .&&.
+                  sum [xs IntMap.! y | y <- IntSet.toList ys] <= k
+
+prop_subsetsExactly :: Property
+prop_subsetsExactly =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntMap $ \(xs :: IntMap Integer) ->
+      forAll arbitrary $ \k ->
+        let a :: ZDD o
+            a = ZDD.subsetsExactly xs k
+         in counterexample (show a) $
+              if ZDD.null a then
+                property True
+              else
+                forAll (arbitraryMember a) $ \ys ->
+                  (ys `IntSet.isSubsetOf` IntMap.keysSet xs)
+                  .&&.
+                  sum [xs IntMap.! y | y <- IntSet.toList ys] === k
+
+prop_subsetsExactly_2 :: Property
+prop_subsetsExactly_2 =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntMap $ \(xs :: IntMap Integer) ->
+      forAll (gen xs) $ \(ys, k) ->
+        let a :: ZDD o
+            a = ZDD.subsetsExactly xs k
+         in counterexample (show a) $ ys `ZDD.member` a
+  where
+    gen xs = do
+      ys <- sublistOf (IntMap.toList xs)
+      return (IntSet.fromList [y | (y,_) <- ys], sum [w | (_,w) <- ys])
+
+prop_subsetsExactlyIntegral :: Property
+prop_subsetsExactlyIntegral =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntMap $ \(xs :: IntMap Integer) ->
+      forAll arbitrary $ \k ->
+        (ZDD.subsetsExactlyIntegral xs k :: ZDD o) === ZDD.subsetsExactly xs k
+
+prop_combinations_are_combinations :: Property
+prop_combinations_are_combinations =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \xs ->
+      forAll arbitrary $ \(NonNegative k) ->
+        let a :: ZDD o
+            a = ZDD.combinations xs k
+         in counterexample (show a) $
+              not (ZDD.null a)
+              ==>
+              (forAll (arbitraryMember a) $ \ys -> (ys `IntSet.isSubsetOf` xs) .&&. (IntSet.size ys === k))
+
+prop_combinations_size :: Property
+prop_combinations_size =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \xs ->
+      forAll arbitrary $ \(NonNegative k) ->
+        let a :: ZDD o
+            a = ZDD.combinations xs k
+            n = toInteger $ IntSet.size xs
+         in counterexample (show a) $ ZDD.size a === (product [(n - toInteger k + 1)..n] `div` (product [1..toInteger k]))
 
 case_toList_lazyness :: Assertion
 case_toList_lazyness = do
@@ -698,6 +797,14 @@ case_jdd_test_3 = do
 
 subsetOf :: IntSet -> Gen IntSet
 subsetOf = liftM IntSet.fromList . sublistOf . IntSet.toList
+
+arbitrarySmallIntMap :: Arbitrary a => Gen (IntMap a)
+arbitrarySmallIntMap = do
+  n <- choose (0, 12)
+  liftM IntMap.fromList $ replicateM n $ do
+    k <- arbitrary
+    v <- arbitrary
+    return (k, v)
 
 -- ------------------------------------------------------------------------
 

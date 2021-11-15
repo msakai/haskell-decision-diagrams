@@ -49,8 +49,15 @@ module Data.DecisionDiagram.ZDD
   , base
   , singleton
   , subsets
+  , combinations
   , fromListOfIntSets
   , fromSetOfIntSets
+
+  -- ** Pseudo-boolean constraints
+  , subsetsAtLeast
+  , subsetsAtMost
+  , subsetsExactly
+  , subsetsExactlyIntegral
 
   -- * Insertion
   , insert
@@ -88,6 +95,10 @@ module Data.DecisionDiagram.ZDD
   , fold
   , fold'
 
+  -- * Unfold
+  , unfoldHashable
+  , unfoldOrd
+
   -- * Minimal hitting sets
   , minimalHittingSets
   , minimalHittingSetsToda
@@ -123,6 +134,8 @@ import Control.Monad
 import Control.Monad.Primitive
 #endif
 import Control.Monad.ST
+import qualified Data.Foldable as Foldable
+import Data.Function (on)
 import Data.Functor.Identity
 import Data.Hashable
 import Data.HashMap.Lazy (HashMap)
@@ -134,12 +147,15 @@ import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List (foldl', sortBy)
+import Data.Map.Lazy (Map)
+import qualified Data.Map.Lazy as Map
 import Data.Maybe
 import Data.Proxy
 import Data.Ratio
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.STRef
+import qualified Data.Vector as V
 import qualified GHC.Exts as Exts
 import GHC.Generics (Generic)
 import Numeric.Natural
@@ -259,6 +275,103 @@ subsets :: forall a. ItemOrder a => IntSet -> ZDD a
 subsets = foldl' f Base . sortBy (flip (compareItem (Proxy :: Proxy a))) . IntSet.toList
   where
     f zdd x = Branch x zdd zdd
+
+-- | Set of all k-combination of a set
+combinations :: forall a. ItemOrder a => IntSet -> Int -> ZDD a
+combinations xs k
+  | k < 0 = error "Data.DecisionDiagram.ZDD.combinations: negative size"
+  | otherwise = unfoldOrd f (0, k)
+  where
+    table = V.fromList $ sortBy (compareItem (Proxy :: Proxy a)) $ IntSet.toList xs
+    n = V.length table
+
+    f :: (Int, Int) -> Sig (Int, Int)
+    f (!_, !0) = SBase
+    f (!i, !k')
+      | i + k' > n = SEmpty
+      | otherwise  = SBranch (table V.! i) (i+1, k') (i+1, k'-1)
+
+-- | Set of all subsets whose sum of weights is at least k.
+subsetsAtLeast :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> ZDD a
+subsetsAtLeast xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (k <= ub) = SEmpty
+      | i == V.length xs' && 0 >= k = SBase
+      | lb >= k = SBranch x (i+1, lb) (i+1, lb) -- all remaining variables are don't-care
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+
+-- | Set of all subsets whose sum of weights is at most k.
+subsetsAtMost :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> ZDD a
+subsetsAtMost xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (lb <= k) = SEmpty
+      | i == V.length xs' && 0 <= k = SBase
+      | ub <= k = SBranch x (i+1, ub) (i+1, ub) -- all remaining variables are don't-care
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+
+-- | Set of all subsets whose sum of weights is exactly k.
+--
+-- Note that 'combinations' is a special case where all weights are 1.
+--
+-- If weight type is 'Integral', 'subsetsExactlyIntegral' is more efficient.
+subsetsExactly :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> ZDD a
+subsetsExactly xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (lb <= k && k <= ub) = SEmpty
+      | i == V.length xs' && 0 == k = SBase
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+
+-- | Similar to 'subsetsExactly' but more efficient.
+subsetsExactlyIntegral :: forall a w. (ItemOrder a, Real w, Integral w) => IntMap w -> w -> ZDD a
+subsetsExactlyIntegral xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+    ds :: V.Vector w
+    ds = V.scanr1 (\w d -> if w /= 0 then gcd w d else d) (V.map snd xs')
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (lb <= k && k <= ub) = SEmpty
+      | i == V.length xs' && 0 == k = SBase
+      | d /= 0 && k `mod` d /= 0 = SEmpty
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+        d = ds V.! i
 
 -- | Select subsets that contain a particular element and then remove the element from them
 --
@@ -737,6 +850,47 @@ fold' !ff !tt br zdd = runST $ do
             seq ret $ H.insert h p ret
             return ret
   f zdd
+
+-- ------------------------------------------------------------------------
+
+unfoldHashable :: forall a b. (ItemOrder a, Eq b, Hashable b) => (b -> Sig b) -> b -> ZDD a
+unfoldHashable f b = runST $ do
+  h <- C.newSized defaultTableSize
+  let g [] = return ()
+      g (x : xs) = do
+        r <- H.lookup h x
+        case r of
+          Just _ -> g xs
+          Nothing -> do
+            let fx = f x
+            H.insert h x fx
+            g (xs ++ Foldable.toList fx)
+  g [b]
+  xs <- H.toList h
+  let h2 = HashMap.fromList [(x, inSig (fmap (h2 HashMap.!) s)) | (x,s) <- xs]
+  return $ h2 HashMap.! b
+
+unfoldOrd :: forall a b. (ItemOrder a, Ord b) => (b -> Sig b) -> b -> ZDD a
+unfoldOrd f b = m2 Map.! b
+  where
+    m1 :: Map b (Sig b)
+    m1 = g Map.empty [b]
+
+    m2 :: Map b (ZDD a)
+    m2 = Map.map (inSig . fmap (m2 Map.!)) m1
+
+    g m [] = m
+    g m (x : xs) =
+      case Map.lookup x m of
+        Just _ -> g m xs
+        Nothing ->
+          let fx = f x
+           in g (Map.insert x fx m) (xs ++ Foldable.toList fx)
+
+inSig :: Sig (ZDD a) -> ZDD a
+inSig SEmpty = Empty
+inSig SBase = Base
+inSig (SBranch x lo hi) = Branch x lo hi
 
 -- ------------------------------------------------------------------------
 

@@ -56,6 +56,12 @@ module Data.DecisionDiagram.BDD
   , andB
   , orB
 
+  -- * Pseudo-boolean constraints
+  , pbAtLeast
+  , pbAtMost
+  , pbExactly
+  , pbExactlyIntegral
+
   -- * Quantification
   , forAll
   , exists
@@ -81,6 +87,10 @@ module Data.DecisionDiagram.BDD
   , fold
   , fold'
 
+  -- * Unfold
+  , unfoldHashable
+  , unfoldOrd
+
   -- * Fixpoints
   , lfp
   , gfp
@@ -96,9 +106,11 @@ module Data.DecisionDiagram.BDD
 import Control.Exception (assert)
 import Control.Monad
 import Control.Monad.ST
+import qualified Data.Foldable as Foldable
 import Data.Function (on)
 import Data.Functor.Identity
 import Data.Hashable
+import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
 import Data.IntMap (IntMap)
@@ -106,8 +118,11 @@ import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List (sortBy)
+import Data.Map.Lazy (Map)
+import qualified Data.Map.Lazy as Map
 import Data.Proxy
 import Data.STRef
+import qualified Data.Vector as V
 import GHC.Generics (Generic)
 import Text.Read
 
@@ -347,6 +362,88 @@ orB xs = runST $ do
 
 -- ------------------------------------------------------------------------
 
+-- | Pseudo-boolean constraint, /w1*x1 + w2*x2 + … ≥ k/.
+pbAtLeast :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> BDD a
+pbAtLeast xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (k <= ub) = SLeaf False
+      | i == V.length xs' && 0 >= k = SLeaf True
+      | lb >= k = SLeaf True -- all remaining variables are don't-care
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+
+-- | Pseudo-boolean constraint, /w1*x1 + w2*x2 + … ≤ k/.
+pbAtMost :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> BDD a
+pbAtMost xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (lb <= k) = SLeaf False
+      | i == V.length xs' && 0 <= k = SLeaf True
+      | ub <= k = SLeaf True -- all remaining variables are don't-care
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+
+-- | Pseudo-boolean constraint, /w1*x1 + w2*x2 + … = k/.
+--
+-- If weight type is 'Integral', 'pbExactlyIntegral' is more efficient.
+pbExactly :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> BDD a
+pbExactly xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (lb <= k && k <= ub) = SLeaf False
+      | i == V.length xs' && 0 == k = SLeaf True
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+
+-- | Similar to 'pbExactly' but more efficient.
+pbExactlyIntegral :: forall a w. (ItemOrder a, Real w, Integral w) => IntMap w -> w -> BDD a
+pbExactlyIntegral xs k0 = unfoldOrd f (0, k0)
+  where
+    xs' :: V.Vector (Int, w)
+    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    ys :: V.Vector (w, w)
+    ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
+    ds :: V.Vector w
+    ds = V.scanr1 (\w d -> if w /= 0 then gcd w d else d) (V.map snd xs')
+
+    f :: (Int, w) -> Sig (Int, w)
+    f (!i, !k)
+      | not (lb <= k && k <= ub) = SLeaf False
+      | i == V.length xs' && 0 == k = SLeaf True
+      | d /= 0 && k `mod` d /= 0 = SLeaf False
+      | otherwise = SBranch x (i+1, k) (i+1, k-w)
+      where
+        (lb,ub) = ys V.! i
+        (x, w) = xs' V.! i
+        d = ds V.! i
+
+-- ------------------------------------------------------------------------
+
 -- | Universal quantification (∀)
 forAll :: forall a. ItemOrder a => Int -> BDD a -> BDD a
 forAll x bdd = runST $ do
@@ -517,6 +614,46 @@ mkFold'Op !ff !tt br = do
             seq ret $ H.insert h p ret
             return ret
   return f
+
+-- ------------------------------------------------------------------------
+
+unfoldHashable :: forall a b. (ItemOrder a, Eq b, Hashable b) => (b -> Sig b) -> b -> BDD a
+unfoldHashable f b = runST $ do
+  h <- C.newSized defaultTableSize
+  let g [] = return ()
+      g (x : xs) = do
+        r <- H.lookup h x
+        case r of
+          Just _ -> g xs
+          Nothing -> do
+            let fx = f x
+            H.insert h x fx
+            g (xs ++ Foldable.toList fx)
+  g [b]
+  xs <- H.toList h
+  let h2 = HashMap.fromList [(x, inSig (fmap (h2 HashMap.!) s)) | (x,s) <- xs]
+  return $ h2 HashMap.! b
+
+unfoldOrd :: forall a b. (ItemOrder a, Ord b) => (b -> Sig b) -> b -> BDD a
+unfoldOrd f b = m2 Map.! b
+  where
+    m1 :: Map b (Sig b)
+    m1 = g Map.empty [b]
+
+    m2 :: Map b (BDD a)
+    m2 = Map.map (inSig . fmap (m2 Map.!)) m1
+
+    g m [] = m
+    g m (x : xs) =
+      case Map.lookup x m of
+        Just _ -> g m xs
+        Nothing ->
+          let fx = f x
+           in g (Map.insert x fx m) (xs ++ Foldable.toList fx)
+
+inSig :: Sig (BDD a) -> BDD a
+inSig (SLeaf b) = Leaf b
+inSig (SBranch x lo hi) = Branch x lo hi
 
 -- ------------------------------------------------------------------------
 

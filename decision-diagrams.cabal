@@ -59,6 +59,7 @@ library
     , random >=1.1 && <1.3
     , reflection >=2.1.4 && <2.2
     , unordered-containers >=0.2.9.0 && <0.3
+    , vector >=0.12.0.2 && <0.13
   default-language: Haskell2010
 
 test-suite decision-diagrams-doctest

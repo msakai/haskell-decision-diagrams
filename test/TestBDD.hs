@@ -4,7 +4,8 @@
 module TestBDD (bddTestGroup) where
 
 import Control.Monad
-import qualified Data.IntMap as IntMap
+import Data.IntMap.Lazy (IntMap)
+import qualified Data.IntMap.Lazy as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.List
@@ -48,6 +49,25 @@ arbitraryBDDOver xs = do
         | n > 0, not (null vs)
         ]
   sized $ f (sortBy (BDD.compareItem (Proxy :: Proxy a)) $ IntSet.toList xs)
+
+arbitrarySatisfyingAssignment :: forall a. BDD.ItemOrder a => BDD a -> IntSet -> Gen (IntMap Bool)
+arbitrarySatisfyingAssignment bdd xs = do
+  m1 <- arbitrarySatisfyingPartialAssignment bdd
+  let ys = xs `IntSet.difference` IntMap.keysSet m1
+  m2 <- liftM(IntMap.fromAscList) $ forM (IntSet.toAscList ys) $ \y -> do
+    v <- arbitrary
+    return (y,v)
+  return $ m1 `IntMap.union` m2
+
+arbitrarySatisfyingPartialAssignment :: forall a. BDD.ItemOrder a => BDD a -> Gen (IntMap Bool)
+arbitrarySatisfyingPartialAssignment = f
+  where
+    f (BDD.Leaf True) = return IntMap.empty
+    f (BDD.Leaf False) = undefined
+    f (BDD.Branch x lo hi) = oneof $
+      [liftM (IntMap.insert x False) (f lo) | lo /= BDD.Leaf False]
+      ++
+      [liftM (IntMap.insert x True) (f hi) | hi /= BDD.Leaf False]
 
 -- ------------------------------------------------------------------------
 -- conjunction
@@ -302,6 +322,83 @@ prop_ite_dist_or =
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(c :: BDD o, t, e, d) ->
       (d BDD..||. BDD.ite c t e) === BDD.ite c (d BDD..||. t) (d BDD..||. e)
+
+-- ------------------------------------------------------------------------
+-- Pseudo-Boolean
+-- ------------------------------------------------------------------------
+
+prop_pbAtLeast :: Property
+prop_pbAtLeast =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntMap $ \(xs :: IntMap Integer) ->
+      forAll arbitrary $ \k ->
+        let a :: BDD o
+            a = BDD.pbAtLeast xs k
+         in counterexample (show a) $
+              if a == BDD.Leaf False then
+                property (k > sum [max 0 w | (_,w) <- IntMap.toList xs])
+              else
+                forAll (arbitrarySatisfyingAssignment a (IntMap.keysSet xs)) $ \ys ->
+                  (IntMap.keysSet ys `IntSet.isSubsetOf` IntMap.keysSet xs)
+                  .&&.
+                  sum [xs IntMap.! y | (y,b) <- IntMap.toList ys, b] >= k
+
+prop_pbAtMost :: Property
+prop_pbAtMost =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntMap $ \(xs :: IntMap Integer) ->
+      forAll arbitrary $ \k ->
+        let a :: BDD o
+            a = BDD.pbAtMost xs k
+         in counterexample (show a) $
+              if a == BDD.Leaf False then
+                property (k < sum [min 0 w | (_,w) <- IntMap.toList xs])
+              else
+                forAll (arbitrarySatisfyingAssignment a (IntMap.keysSet xs)) $ \ys ->
+                  (IntMap.keysSet ys `IntSet.isSubsetOf` IntMap.keysSet xs)
+                  .&&.
+                  sum [xs IntMap.! y | (y,b) <- IntMap.toList ys, b] <= k
+
+prop_pbExactly :: Property
+prop_pbExactly =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntMap $ \(xs :: IntMap Integer) ->
+      forAll arbitrary $ \k ->
+        let a :: BDD o
+            a = BDD.pbExactly xs k
+         in counterexample (show a) $
+              if a == BDD.Leaf False then
+                property True
+              else
+                forAll (arbitrarySatisfyingAssignment a (IntMap.keysSet xs)) $ \ys ->
+                  (IntMap.keysSet ys `IntSet.isSubsetOf` IntMap.keysSet xs)
+                  .&&.
+                  sum [xs IntMap.! y | (y,b) <- IntMap.toList ys, b] === k
+
+prop_pbExactly_2 :: Property
+prop_pbExactly_2 =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntMap $ \(xs :: IntMap Integer) ->
+      forAll (gen xs) $ \(m, k) ->
+        let a :: BDD o
+            a = BDD.pbExactly xs k
+         in counterexample (show a) $ BDD.evaluate (m IntMap.!) a
+  where
+    gen :: IntMap Integer -> Gen (IntMap Bool, Integer)
+    gen xs = do
+      ys <- sublistOf (IntMap.toList xs)
+      let ys' = IntSet.fromList [y | (y,_) <- ys]
+      return
+        ( IntMap.mapWithKey (\x _ -> x `IntSet.member` ys') xs
+        , sum [w | (_,w) <- ys]
+        )
+
+prop_pbExactlyIntegral :: Property
+prop_pbExactlyIntegral =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntMap $ \(xs :: IntMap Integer) ->
+      forAll arbitrary $ \k ->
+        (BDD.pbExactlyIntegral xs k :: BDD o) === BDD.pbExactly xs k
 
 -- ------------------------------------------------------------------------
 -- Quantification
@@ -912,6 +1009,16 @@ prop_toGraph_fromGraph = do
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(a :: BDD o) ->
       BDD.fromGraph (BDD.toGraph a) === a
+
+-- ------------------------------------------------------------------------
+
+arbitrarySmallIntMap :: Arbitrary a => Gen (IntMap a)
+arbitrarySmallIntMap = do
+  n <- choose (0, 12)
+  liftM IntMap.fromList $ replicateM n $ do
+    k <- arbitrary
+    v <- arbitrary
+    return (k, v)
 
 -- ------------------------------------------------------------------------
 
