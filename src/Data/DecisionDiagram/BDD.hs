@@ -106,6 +106,7 @@ module Data.DecisionDiagram.BDD
 import Control.Exception (assert)
 import Control.Monad
 import Control.Monad.ST
+import Control.Monad.ST.Unsafe
 import qualified Data.Foldable as Foldable
 import Data.Function (on)
 import Data.Functor.Identity
@@ -585,10 +586,10 @@ fold ff tt br bdd = runST $ do
         case m of
           Just ret -> return ret
           Nothing -> do
-            r0 <- f lo
-            r1 <- f hi
+            r0 <- unsafeInterleaveST $ f lo
+            r1 <- unsafeInterleaveST $ f hi
             let ret = br top r0 r1
-            H.insert h p ret
+            H.insert h p ret  -- Note that H.insert is value-strict
             return ret
   f bdd
 
@@ -611,7 +612,7 @@ mkFold'Op !ff !tt br = do
             r0 <- f lo
             r1 <- f hi
             let ret = br top r0 r1
-            seq ret $ H.insert h p ret
+            H.insert h p ret  -- Note that H.insert is value-strict
             return ret
   return f
 
