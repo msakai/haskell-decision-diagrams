@@ -647,7 +647,7 @@ prop_uniformM =
             hist_actual = Map.fromListWith (+) [(s, 1) | s <- samples]
             hist_expected = [(s, fromIntegral n / fromIntegral m) | s <- ZDD.toListOfIntSets a]
             chi_sq = sum [(Map.findWithDefault 0 s hist_actual - cnt) ** 2 / cnt | (s, cnt) <- hist_expected]
-            threshold = complQuantile (chiSquared (fromIntegral m - 1)) 0.001
+            threshold = complQuantile (chiSquared (fromIntegral m - 1)) 0.0001
          in counterexample (show hist_actual ++ " /= " ++ show (Map.fromList hist_expected)) $
               and [xs `ZDD.member` a | xs <- Map.keys hist_actual] .&&.
               counterexample ("χ² = " ++ show chi_sq ++ " >= " ++ show threshold) (chi_sq < threshold)
