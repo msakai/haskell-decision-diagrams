@@ -10,6 +10,7 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
+import Data.IORef
 import Data.List
 import qualified Data.Map.Strict as Map
 import Data.Proxy
@@ -20,6 +21,7 @@ import Data.Word
 import qualified GHC.Exts as Exts
 import Statistics.Distribution
 import Statistics.Distribution.ChiSquared (chiSquared)
+import System.IO.Unsafe
 import qualified System.Random.MWC as Rand
 import Test.QuickCheck.Function (apply)
 import Test.QuickCheck.Instances.Vector ()
@@ -677,6 +679,29 @@ prop_findMaxSum =
               setWeight s0 === obj0
               .&&.
               conjoin [counterexample (show (s, setWeight s)) $ obj0 >= setWeight s | s <- ZDD.toListOfIntSets a]
+
+case_fold_laziness :: Assertion
+case_fold_laziness = do
+  let bdd :: ZDD ZDD.AscOrder
+      bdd = ZDD.Branch 0 (ZDD.Branch 1 ZDD.Empty ZDD.Base) (ZDD.Branch 2 ZDD.Empty ZDD.Base)
+      f x lo _hi =
+        if x == 2 then
+          error "unused value should not be evaluated"
+        else
+          lo
+  seq (ZDD.fold False True f bdd) $ return ()
+
+case_fold'_strictness :: Assertion
+case_fold'_strictness = do
+  ref <- newIORef False
+  let bdd :: ZDD ZDD.AscOrder
+      bdd = ZDD.Branch 0 (ZDD.Branch 1 ZDD.Empty ZDD.Base) (ZDD.Branch 2 ZDD.Empty ZDD.Base)
+      f x lo _hi = unsafePerformIO $ do
+        when (x==2) $ writeIORef ref True
+        return lo
+  seq (ZDD.fold' False True f bdd) $ do
+    flag <- readIORef ref
+    assertBool "unused value should be evaluated" flag
 
 -- ------------------------------------------------------------------------
 
