@@ -8,8 +8,10 @@ import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
+import Data.IORef
 import Data.List
 import Data.Proxy
+import System.IO.Unsafe
 import Test.QuickCheck.Function (apply)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -509,6 +511,31 @@ prop_existsUniqueSet_union =
     arbitraryDisjointSets = do
       (u, v) <- arbitrary
       return (u `IntSet.intersection` v, u IntSet.\\ v)
+
+-- ------------------------------------------------------------------------
+
+case_fold_laziness :: Assertion
+case_fold_laziness = do
+  let bdd :: BDD BDD.AscOrder
+      bdd = BDD.Branch 0 (BDD.Branch 1 (BDD.Leaf False) (BDD.Leaf True)) (BDD.Branch 2 (BDD.Leaf False) (BDD.Leaf True))
+      f x lo _hi =
+        if x == 2 then
+          error "unused value should not be evaluated"
+        else
+          lo
+  seq (BDD.fold False True f bdd) $ return ()
+
+case_fold'_strictness :: Assertion
+case_fold'_strictness = do
+  ref <- newIORef False
+  let bdd :: BDD BDD.AscOrder
+      bdd = BDD.Branch 0 (BDD.Branch 1 (BDD.Leaf False) (BDD.Leaf True)) (BDD.Branch 2 (BDD.Leaf False) (BDD.Leaf True))
+      f x lo _hi = unsafePerformIO $ do
+        when (x==2) $ writeIORef ref True
+        return lo
+  seq (BDD.fold' False True f bdd) $ do
+    flag <- readIORef ref
+    assertBool "unused value should be evaluated" flag
 
 -- ------------------------------------------------------------------------
 
