@@ -73,6 +73,7 @@ module Data.DecisionDiagram.BDD
   -- * Query
   , support
   , evaluate
+  , numNodes
 
   -- * Restriction / Cofactor
   , restrict
@@ -688,6 +689,12 @@ evaluate f = g
       | f x = g hi
       | otherwise = g lo
 
+-- | Count the number of nodes in a BDD viewed as a rooted directed acyclic graph.
+--
+-- See also 'toGraph'.
+numNodes :: BDD a -> Int
+numNodes (BDD node) = Node.numNodes node
+
 -- ------------------------------------------------------------------------
 
 -- | Compute \(F_x \) or \(F_{\neg x} \).
@@ -970,6 +977,10 @@ instance Hashable a => Hashable (Sig a)
 type Graph f = IntMap (f Int)
 
 -- | Convert a BDD into a pointed graph
+--
+-- Nodes @0@ and @1@ are reserved for @SLeaf False@ and @SLeaf True@
+-- even if they are not actually used. Therefore the result may be
+-- larger than 'numNodes' if the leaf nodes are not used.
 toGraph :: BDD a -> (Graph Sig, Int)
 toGraph bdd =
   case toGraph' (Identity bdd) of

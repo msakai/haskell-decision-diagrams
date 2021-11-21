@@ -73,6 +73,7 @@ module Data.DecisionDiagram.ZDD
   , isSubsetOf
   , isProperSubsetOf
   , disjoint
+  , numNodes
 
   -- * Combine
   , union
@@ -775,6 +776,14 @@ isProperSubsetOf a b = a `isSubsetOf` b && a /= b
 disjoint :: ItemOrder a => ZDD a -> ZDD a -> Bool
 disjoint a b = null (a `intersection` b)
 
+-- | Count the number of nodes in a ZDD viewed as a rooted directed acyclic graph.
+--
+-- Please do not confuse it with 'size'.
+--
+-- See also 'toGraph'.
+numNodes :: ZDD a -> Int
+numNodes (ZDD node) = Node.numNodes node
+
 -- | Unions of all member sets
 --
 -- >>> flatten (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [3,4]]) :: ZDD AscOrder)
@@ -1013,6 +1022,10 @@ instance Hashable a => Hashable (Sig a)
 type Graph f = IntMap (f Int)
 
 -- | Convert a ZDD into a pointed graph
+--
+-- Nodes @0@ and @1@ are reserved for @SEmpty@ and @SBase@ even if
+-- they are not actually used. Therefore the result may be larger than
+-- 'numNodes' if the leaf nodes are not used.
 toGraph :: ZDD a -> (Graph Sig, Int)
 toGraph bdd =
   case toGraph' (Identity bdd) of
