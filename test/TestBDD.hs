@@ -11,6 +11,7 @@ import qualified Data.IntSet as IntSet
 import Data.IORef
 import Data.List
 import Data.Proxy
+import qualified Data.Set as Set
 import System.IO.Unsafe
 import Test.QuickCheck.Function (apply)
 import Test.Tasty
@@ -1031,6 +1032,64 @@ prop_lfp_imply_gfp =
 
 -- ------------------------------------------------------------------------
 
+prop_anySat :: Property
+prop_anySat =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(bdd :: BDD o) ->
+      case BDD.anySat bdd of
+        Just p -> counterexample (show p) $ BDD.evaluate (p IntMap.!) bdd
+        Nothing -> bdd === BDD.Leaf False
+
+prop_allSat :: Property
+prop_allSat =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntSet $ \xs ->
+      forAll (arbitraryBDDOver xs) $ \(bdd :: BDD o) ->
+         let ps = BDD.allSat bdd
+         in null ps === (bdd == BDD.Leaf False)
+            .&&.
+            conjoin [counterexample (show p) $ BDD.evaluate (p IntMap.!) bdd |  p <- ps]
+
+prop_anySatComplete :: Property
+prop_anySatComplete =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \xs ->
+      forAll (arbitraryBDDOver xs) $ \(bdd :: BDD o) ->
+        case BDD.anySatComplete xs bdd of
+          Just p -> counterexample (show p) $
+            IntMap.keysSet p === xs
+            .&&.
+            BDD.evaluate (p IntMap.!) bdd
+          Nothing -> bdd === BDD.Leaf False
+
+prop_allSatComplete :: Property
+prop_allSatComplete =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntSet $ \xs ->
+      forAll (arbitraryBDDOver xs) $ \(bdd :: BDD o) ->
+        let ps = BDD.allSatComplete xs bdd
+            qs = [q | q <- foldM (\m x -> [IntMap.insert x v m | v <- [False, True]]) IntMap.empty (IntSet.toList xs)
+                    , BDD.evaluate (q IntMap.!) bdd]
+         in conjoin [counterexample (show p) (IntMap.keysSet p === xs) | p <- ps]
+            .&&.
+            Set.fromList ps === Set.fromList qs
+
+prop_countSat_allSatComplete :: Property
+prop_countSat_allSatComplete =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrarySmallIntSet $ \xs ->
+      forAll (arbitraryBDDOver xs) $ \(bdd :: BDD o) ->
+        let ps = BDD.allSatComplete xs bdd
+            n = BDD.countSat xs bdd
+         in counterexample (show n) $
+              if bdd == BDD.Leaf False then
+                n === 0
+              else
+                -- Note that the number of partial assignments is smaller than the number of total assignments
+                (n > 0) .&&. n === length ps
+
+-- ------------------------------------------------------------------------
+
 prop_toGraph_fromGraph :: Property
 prop_toGraph_fromGraph = do
   forAllItemOrder $ \(_ :: Proxy o) ->
@@ -1038,6 +1097,11 @@ prop_toGraph_fromGraph = do
       BDD.fromGraph (BDD.toGraph a) === a
 
 -- ------------------------------------------------------------------------
+
+arbitrarySmallIntSet :: Gen IntSet
+arbitrarySmallIntSet = do
+  n <- choose (0, 12)
+  liftM IntSet.fromList $ replicateM n arbitrary
 
 arbitrarySmallIntMap :: Arbitrary a => Gen (IntMap a)
 arbitrarySmallIntMap = do

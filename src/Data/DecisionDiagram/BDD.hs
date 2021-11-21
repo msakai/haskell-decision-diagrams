@@ -83,6 +83,13 @@ module Data.DecisionDiagram.BDD
   , subst
   , substSet
 
+  -- * Satisfiability
+  , anySat
+  , allSat
+  , anySatComplete
+  , allSatComplete
+  , countSat
+
   -- * Fold
   , fold
   , fold'
@@ -125,6 +132,7 @@ import Data.Proxy
 import Data.STRef
 import qualified Data.Vector as V
 import GHC.Generics (Generic)
+import Numeric.Natural
 import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
@@ -870,6 +878,82 @@ gfp f = go true
       | otherwise = go next
       where
         next = f curr
+
+-- ------------------------------------------------------------------------
+
+findSatM :: MonadPlus m => BDD a -> m (IntMap Bool)
+findSatM = fold mzero (return IntMap.empty) f
+  where
+    f x lo hi = mplus (liftM (IntMap.insert x False) lo) (liftM (IntMap.insert x True) hi)
+
+-- | Find one satisfying partial assignment
+anySat :: BDD a -> Maybe (IntMap Bool)
+anySat = findSatM
+
+-- | Enumerate all satisfying partial assignments
+allSat :: BDD a -> [IntMap Bool]
+allSat = findSatM
+
+findSatCompleteM :: forall a m. (MonadPlus m, ItemOrder a) => IntSet -> BDD a -> m (IntMap Bool)
+findSatCompleteM xs0 bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f _ (Leaf False) = return $ mzero
+      f xs (Leaf True) = return $ foldM (\m x -> msum [return (IntMap.insert x v m) | v <- [False, True]]) IntMap.empty xs
+      f xs n@(Branch x lo hi) = do
+        case span (\x2 -> compareItem (Proxy :: Proxy a) x2 x == LT) xs of
+          (ys, (x':xs')) | x == x' -> do
+            r <- H.lookup h n
+            ps <- case r of
+              Just ret -> return ret
+              Nothing -> do
+                r0 <- unsafeInterleaveST $ f xs' lo
+                r1 <- unsafeInterleaveST $ f xs' hi
+                let ret = liftM (IntMap.insert x False) r0 `mplus` liftM (IntMap.insert x True) r1
+                H.insert h n ret
+                return ret
+            return $ do
+              p <- ps
+              foldM (\m y -> msum [return (IntMap.insert y v m) | v <- [False, True]]) p ys
+          _ -> error ("findSatCompleteM: " ++ show x ++ " should not occur")
+  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs0)) bdd
+
+-- | Find one satisfying (complete) assignment over a given set of variables
+--
+-- The set of variables must be a superset of 'support'.
+anySatComplete :: ItemOrder a => IntSet -> BDD a -> Maybe (IntMap Bool)
+anySatComplete = findSatCompleteM
+
+-- | Enumerate all satisfying (complete) assignment over a given set of variables
+--
+-- The set of variables must be a superset of 'support'.
+allSatComplete :: ItemOrder a => IntSet -> BDD a -> [IntMap Bool]
+allSatComplete = findSatCompleteM
+
+{-# SPECIALIZE countSat :: ItemOrder a => IntSet -> BDD a -> Int #-}
+{-# SPECIALIZE countSat :: ItemOrder a => IntSet -> BDD a -> Integer #-}
+{-# SPECIALIZE countSat :: ItemOrder a => IntSet -> BDD a -> Natural #-}
+-- | Count the number of satisfying (complete) assignment over a given set of variables
+--
+-- The set of variables must be a superset of 'support'.
+countSat :: forall a b. (ItemOrder a, Integral b) => IntSet -> BDD a -> b
+countSat xs' bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f _ (Leaf False) = return $ 0
+      f xs (Leaf True) = return $! 2 ^ length xs
+      f [] (Branch x _ _) = error ("countSat: " ++ show x ++ " should not occur")
+      f (x1 : xs) n@(Branch x2 lo hi) = do
+        case compareItem (Proxy :: Proxy a) x1 x2 of
+          GT -> error ("countSat: " ++ show x2 ++ " should not occur")
+          LT -> liftM (2 *) (f xs n) -- inefficient
+          EQ -> do
+            m <- H.lookup h n
+            case m of
+              Just ret -> return ret
+              Nothing -> do
+                ret <- liftM2 (+) (f xs lo) (f xs hi)
+                H.insert h n ret
+                return ret
+  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs')) bdd
 
 -- ------------------------------------------------------------------------
 
