@@ -24,9 +24,15 @@ module Data.DecisionDiagram.BDD.Internal.Node
   -- * Low level node type
     Node (T, F, Branch)
   , nodeId
+
+  , numNodes
   ) where
 
+import Control.Monad
+import Control.Monad.ST
 import Data.Hashable
+import qualified Data.HashTable.Class as H
+import qualified Data.HashTable.ST.Cuckoo as C
 import Data.Interned
 import GHC.Generics
 
@@ -86,5 +92,26 @@ nodeCache = mkCache
 
 nodeId :: Node -> Id
 nodeId (Node id_ _) = id_
+
+-- ------------------------------------------------------------------------
+
+defaultTableSize :: Int
+defaultTableSize = 256
+
+-- | Counts the number of nodes when viewed as a rooted directed acyclic graph
+numNodes :: Node -> Int
+numNodes node0 = runST $ do
+  h <- C.newSized defaultTableSize
+  let f node = do
+        m <- H.lookup h node
+        case m of
+          Just _ -> return ()
+          Nothing -> do
+            H.insert h node ()
+            case node of
+              Branch _ lo hi -> f lo >> f hi
+              _ -> return ()
+  f node0
+  liftM length $ H.toList h
 
 -- ------------------------------------------------------------------------

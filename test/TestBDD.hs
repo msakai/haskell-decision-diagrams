@@ -610,6 +610,15 @@ prop_evaluate_or =
 
 -- ------------------------------------------------------------------------
 
+case_numNodes :: Assertion
+case_numNodes = do
+  let bdd, bdd1 :: BDD BDD.AscOrder
+      bdd = BDD.Branch 0 (BDD.Branch 1 BDD.false bdd1) (BDD.Branch 2 BDD.false bdd1)
+      bdd1 = BDD.Branch 3 BDD.true BDD.false
+  BDD.numNodes bdd @?= 6
+
+-- ------------------------------------------------------------------------
+
 prop_restrict :: Property
 prop_restrict =
   forAllItemOrder $ \(_ :: Proxy o) ->

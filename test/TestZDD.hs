@@ -627,6 +627,13 @@ prop_disjoint =
     forAll arbitrary $ \(a :: ZDD o, b) ->
       ZDD.disjoint a b === ZDD.null (a `ZDD.intersection` b)
 
+case_numNodes :: Assertion
+case_numNodes = do
+  let bdd, bdd1 :: ZDD ZDD.AscOrder
+      bdd = ZDD.Branch 0 (ZDD.Branch 1 ZDD.empty bdd1) (ZDD.Branch 2 ZDD.empty bdd1)
+      bdd1 = ZDD.Branch 3 ZDD.empty ZDD.base
+  ZDD.numNodes bdd @?= 6
+
 prop_flatten :: Property
 prop_flatten =
   forAllItemOrder $ \(_ :: Proxy o) ->
