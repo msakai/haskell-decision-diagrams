@@ -1001,47 +1001,45 @@ uniformSatM :: forall a g m. (ItemOrder a, StatefulGen g m) => IntSet -> BDD a -
 #else
 uniformSatM :: forall a m. (ItemOrder a, PrimMonad m) => IntSet -> BDD a -> Gen (PrimState m) -> m (IntMap Bool)
 #endif
-uniformSatM xs0 bdd0 = func
+uniformSatM xs0 bdd0 = func IntMap.empty
   where
-    func gen = do
-      let f xs bdd m = do
-            vals <- replicateM (length xs) (uniformM gen)
-            g bdd (m  `IntMap.union` IntMap.fromList (zip xs vals))
-          g (Leaf True) m = return m
-          g (Leaf False) _ = error "uniformSatM: should not happen"
-          g bdd@(Branch x lo hi) m = do
-            let (r, ys0, ys1) = table HashMap.! bdd
-            b <- bernoulli r gen
-            if b then
-              f ys1 hi (IntMap.insert x True m)
-            else
-              f ys0 lo (IntMap.insert x False m)
-      f ys bdd0 IntMap.empty
-
-    (table, ys) = runST $ do
+    func = runST $ do
       h <- C.newSized defaultTableSize
-      let f xs (Leaf False) = return (0 :: Integer, xs)
-          f xs (Leaf True) = return (1, xs)
-          f xs p@(Branch x lo hi) =
-            case span (\x2 -> compareItem (Proxy :: Proxy a) x2 x == LT) xs of
-              (zs, (x':xs')) | x == x' -> do
-                ret <- H.lookup h p
-                case ret of
-                  Just (s, _, _, _) -> return (s, zs)
-                  Nothing -> do
-                    (n0, ys0) <- f xs' lo
-                    (n1, ys1) <- f xs' hi
-                    let n0' = n0 * (1 `shiftL` length ys0)
-                        n1' = n1 * (1 `shiftL` length ys1)
-                        s = n0' + n1'
-                        r :: Double
-                        r = realToFrac (n1' % s)
-                    seq r $ H.insert h p (s, r, ys0, ys1)
-                    return (s, zs)
-              _ -> error ("uniformSatM: " ++ show x ++ " should not occur")
-      (_, xs) <- f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs0)) bdd0
-      tbl <- H.toList h
-      return (HashMap.fromList [(n, (r, ys0, ys1)) | (n, (_, r, ys0, ys1)) <- tbl], xs)
+      let f xs bdd =
+            case span (\x2 -> NonTerminal x2 < level bdd) xs of
+              (ys, xxs') -> do
+                xs' <- case (bdd, xxs') of
+                         (Branch x _ _, x' : xs') | x == x' -> return xs'
+                         (Branch x _ _, _) -> error ("uniformSatM: " ++ show x ++ " should not occur")
+                         (Leaf _, []) -> return []
+                         (Leaf _, _:_) -> error ("uniformSatM: should not happen")
+                (s, func0) <- g xs' bdd
+                let func' !m !gen = do
+                      vals <- replicateM (length ys) (uniformM gen)
+                      func0 (m `IntMap.union` IntMap.fromList (zip ys vals)) gen
+                return (s `shiftL` length ys, func')
+          g _ (Leaf True) = return (1 :: Integer, \a _gen -> return a)
+          g _ (Leaf False) = return (0 :: Integer, \_a _gen -> error "uniformSatM: should not happen")
+          g xs bdd@(Branch x lo hi) = do
+            m <- H.lookup h bdd
+            case m of
+              Just ret -> return ret
+              Nothing -> do
+                (n0, func0) <- f xs lo
+                (n1, func1) <- f xs hi
+                let s = n0 + n1
+                    r :: Double
+                    r = realToFrac (n1 % s)
+                seq r $ return ()
+                let func' !a !gen = do
+                      b <- bernoulli r gen
+                      if b then
+                        func1 (IntMap.insert x True a) gen
+                      else
+                        func0 (IntMap.insert x False a) gen
+                H.insert h bdd (s, func')
+                return (s, func')
+      liftM snd $ f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs0)) bdd0
 
 -- ------------------------------------------------------------------------
 
