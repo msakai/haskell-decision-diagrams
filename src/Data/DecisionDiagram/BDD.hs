@@ -907,7 +907,7 @@ findSatCompleteM xs0 bdd = runST $ do
             ps <- case r of
               Just ret -> return ret
               Nothing -> do
-                r0 <- unsafeInterleaveST $ f xs' lo
+                r0 <- f xs' lo
                 r1 <- unsafeInterleaveST $ f xs' hi
                 let ret = liftM (IntMap.insert x False) r0 `mplus` liftM (IntMap.insert x True) r1
                 H.insert h n ret
