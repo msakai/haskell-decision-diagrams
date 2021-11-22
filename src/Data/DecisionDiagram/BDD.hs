@@ -140,11 +140,11 @@ import Data.STRef
 import qualified Data.Vector as V
 import GHC.Generics (Generic)
 import Numeric.Natural
-import System.Random.MWC (uniformM)
 #if MIN_VERSION_mwc_random(0,15,0)
+import System.Random.MWC (Uniform (..))
 import System.Random.Stateful (StatefulGen (..))
 #else
-import System.Random.MWC (Gen)
+import System.Random.MWC (Gen, Variate (..))
 #endif
 import System.Random.MWC.Distributions (bernoulli)
 import Text.Read
@@ -1015,7 +1015,11 @@ uniformSatM xs0 bdd0 = func IntMap.empty
                          (Leaf _, _:_) -> error ("uniformSatM: should not happen")
                 (s, func0) <- g xs' bdd
                 let func' !m !gen = do
+#if MIN_VERSION_mwc_random(0,15,0)
                       vals <- replicateM (length ys) (uniformM gen)
+#else
+                      vals <- replicateM (length ys) (uniform gen)
+#endif
                       func0 (m `IntMap.union` IntMap.fromList (zip ys vals)) gen
                 return (s `shiftL` length ys, func')
           g _ (Leaf True) = return (1 :: Integer, \a _gen -> return a)
