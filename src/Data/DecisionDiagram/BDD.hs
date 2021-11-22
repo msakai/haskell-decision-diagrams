@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -89,6 +90,7 @@ module Data.DecisionDiagram.BDD
   , anySatComplete
   , allSatComplete
   , countSat
+  , uniformSatM
 
   -- * Fold
   , fold
@@ -112,6 +114,9 @@ module Data.DecisionDiagram.BDD
 
 import Control.Exception (assert)
 import Control.Monad
+#if !MIN_VERSION_mwc_random(0,15,0)
+import Control.Monad.Primitive
+#endif
 import Control.Monad.ST
 import Control.Monad.ST.Unsafe
 import Data.Bits (Bits (shiftL))
@@ -130,10 +135,18 @@ import Data.List (sortBy)
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import Data.Proxy
+import Data.Ratio
 import Data.STRef
 import qualified Data.Vector as V
 import GHC.Generics (Generic)
 import Numeric.Natural
+import System.Random.MWC (uniformM)
+#if MIN_VERSION_mwc_random(0,15,0)
+import System.Random.Stateful (StatefulGen (..))
+#else
+import System.Random.MWC (Gen)
+#endif
+import System.Random.MWC.Distributions (bernoulli)
 import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
@@ -963,6 +976,72 @@ countSat xs bdd = runST $ do
             return $! n `shiftL` length zs
           (_, _) -> error ("countSat: " ++ show x ++ " should not occur")
   f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs)) bdd
+
+-- | Sample an assignment from uniform distribution over complete satisfiable assignments ('allSatComplete') of the BDD.
+--
+-- The function constructs a table internally and the table is shared across
+-- multiple use of the resulting action (@m IntSet@).
+-- Therefore, the code
+--
+-- @
+-- let g = uniformSatM xs bdd gen
+-- s1 <- g
+-- s2 <- g
+-- @
+--
+-- is more efficient than
+--
+-- @
+-- s1 <- uniformSatM xs bdd gen
+-- s2 <- uniformSatM xs bdd gen
+-- @
+-- .
+#if MIN_VERSION_mwc_random(0,15,0)
+uniformSatM :: forall a g m. (ItemOrder a, StatefulGen g m) => IntSet -> BDD a -> g -> m (IntMap Bool)
+#else
+uniformSatM :: forall a m. (ItemOrder a, PrimMonad m) => IntSet -> BDD a -> Gen (PrimState m) -> m (IntMap Bool)
+#endif
+uniformSatM xs0 bdd0 = func
+  where
+    func gen = do
+      let f xs bdd m = do
+            vals <- replicateM (length xs) (uniformM gen)
+            g bdd (m  `IntMap.union` IntMap.fromList (zip xs vals))
+          g (Leaf True) m = return m
+          g (Leaf False) _ = error "uniformSatM: should not happen"
+          g bdd@(Branch x lo hi) m = do
+            let (r, ys0, ys1) = table HashMap.! bdd
+            b <- bernoulli r gen
+            if b then
+              f ys1 hi (IntMap.insert x True m)
+            else
+              f ys0 lo (IntMap.insert x False m)
+      f ys bdd0 IntMap.empty
+
+    (table, ys) = runST $ do
+      h <- C.newSized defaultTableSize
+      let f xs (Leaf False) = return (0 :: Integer, xs)
+          f xs (Leaf True) = return (1, xs)
+          f xs p@(Branch x lo hi) =
+            case span (\x2 -> compareItem (Proxy :: Proxy a) x2 x == LT) xs of
+              (zs, (x':xs')) | x == x' -> do
+                ret <- H.lookup h p
+                case ret of
+                  Just (s, _, _, _) -> return (s, zs)
+                  Nothing -> do
+                    (n0, ys0) <- f xs' lo
+                    (n1, ys1) <- f xs' hi
+                    let n0' = n0 * (1 `shiftL` length ys0)
+                        n1' = n1 * (1 `shiftL` length ys1)
+                        s = n0' + n1'
+                        r :: Double
+                        r = realToFrac (n1' % s)
+                    seq r $ H.insert h p (s, r, ys0, ys1)
+                    return (s, zs)
+              _ -> error ("uniformSatM: " ++ show x ++ " should not occur")
+      (_, xs) <- f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs0)) bdd0
+      tbl <- H.toList h
+      return (HashMap.fromList [(n, (r, ys0, ys1)) | (n, (_, r, ys0, ys1)) <- tbl], xs)
 
 -- ------------------------------------------------------------------------
 
