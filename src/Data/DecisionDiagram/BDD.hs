@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -90,6 +91,7 @@ module Data.DecisionDiagram.BDD
   , anySatComplete
   , allSatComplete
   , countSat
+  , uniformSatM
 
   -- * Fold
   , fold
@@ -113,8 +115,12 @@ module Data.DecisionDiagram.BDD
 
 import Control.Exception (assert)
 import Control.Monad
+#if !MIN_VERSION_mwc_random(0,15,0)
+import Control.Monad.Primitive
+#endif
 import Control.Monad.ST
 import Control.Monad.ST.Unsafe
+import Data.Bits (Bits (shiftL))
 import qualified Data.Foldable as Foldable
 import Data.Function (on)
 import Data.Functor.Identity
@@ -130,10 +136,18 @@ import Data.List (sortBy)
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import Data.Proxy
+import Data.Ratio
 import Data.STRef
 import qualified Data.Vector as V
 import GHC.Generics (Generic)
 import Numeric.Natural
+#if MIN_VERSION_mwc_random(0,15,0)
+import System.Random.MWC (Uniform (..))
+import System.Random.Stateful (StatefulGen (..))
+#else
+import System.Random.MWC (Gen, Variate (..))
+#endif
+import System.Random.MWC.Distributions (bernoulli)
 import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
@@ -913,7 +927,7 @@ findSatCompleteM xs0 bdd = runST $ do
             ps <- case r of
               Just ret -> return ret
               Nothing -> do
-                r0 <- unsafeInterleaveST $ f xs' lo
+                r0 <- f xs' lo
                 r1 <- unsafeInterleaveST $ f xs' hi
                 let ret = liftM (IntMap.insert x False) r0 `mplus` liftM (IntMap.insert x True) r1
                 H.insert h n ret
@@ -939,28 +953,104 @@ allSatComplete = findSatCompleteM
 {-# SPECIALIZE countSat :: ItemOrder a => IntSet -> BDD a -> Int #-}
 {-# SPECIALIZE countSat :: ItemOrder a => IntSet -> BDD a -> Integer #-}
 {-# SPECIALIZE countSat :: ItemOrder a => IntSet -> BDD a -> Natural #-}
--- | Count the number of satisfying (complete) assignment over a given set of variables
+-- | Count the number of satisfying (complete) assignment over a given set of variables.
 --
 -- The set of variables must be a superset of 'support'.
-countSat :: forall a b. (ItemOrder a, Integral b) => IntSet -> BDD a -> b
-countSat xs' bdd = runST $ do
+--
+-- It is polymorphic in return type, but it is recommended to use 'Integer' or 'Natural'
+-- because the size can be larger than fixed integer types such as @Int64@.
+--
+-- >>> countSat (IntSet.fromList [1..128]) (true :: BDD AscOrder)
+-- 340282366920938463463374607431768211456
+-- >>> import Data.Int
+-- >>> maxBound :: Int64
+-- 9223372036854775807
+countSat :: forall a b. (ItemOrder a, Num b, Bits b) => IntSet -> BDD a -> b
+countSat xs bdd = runST $ do
   h <- C.newSized defaultTableSize
   let f _ (Leaf False) = return $ 0
-      f xs (Leaf True) = return $! 2 ^ length xs
-      f [] (Branch x _ _) = error ("countSat: " ++ show x ++ " should not occur")
-      f (x1 : xs) n@(Branch x2 lo hi) = do
-        case compareItem (Proxy :: Proxy a) x1 x2 of
-          GT -> error ("countSat: " ++ show x2 ++ " should not occur")
-          LT -> liftM (2 *) (f xs n) -- inefficient
-          EQ -> do
-            m <- H.lookup h n
+      f ys (Leaf True) = return $! 1 `shiftL` length ys
+      f ys node@(Branch x lo hi) = do
+        case span (\x2 -> compareItem (Proxy :: Proxy a) x2 x == LT) ys of
+          (zs, y' : ys') | x == y' -> do
+            m <- H.lookup h node
+            n <- case m of
+              Just n -> return n
+              Nothing -> do
+                n <- liftM2 (+) (f ys' lo) (f ys' hi)
+                H.insert h node n
+                return n
+            return $! n `shiftL` length zs
+          (_, _) -> error ("countSat: " ++ show x ++ " should not occur")
+  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs)) bdd
+
+-- | Sample an assignment from uniform distribution over complete satisfiable assignments ('allSatComplete') of the BDD.
+--
+-- The function constructs a table internally and the table is shared across
+-- multiple use of the resulting action (@m IntSet@).
+-- Therefore, the code
+--
+-- @
+-- let g = uniformSatM xs bdd gen
+-- s1 <- g
+-- s2 <- g
+-- @
+--
+-- is more efficient than
+--
+-- @
+-- s1 <- uniformSatM xs bdd gen
+-- s2 <- uniformSatM xs bdd gen
+-- @
+-- .
+#if MIN_VERSION_mwc_random(0,15,0)
+uniformSatM :: forall a g m. (ItemOrder a, StatefulGen g m) => IntSet -> BDD a -> g -> m (IntMap Bool)
+#else
+uniformSatM :: forall a m. (ItemOrder a, PrimMonad m) => IntSet -> BDD a -> Gen (PrimState m) -> m (IntMap Bool)
+#endif
+uniformSatM xs0 bdd0 = func IntMap.empty
+  where
+    func = runST $ do
+      h <- C.newSized defaultTableSize
+      let f xs bdd =
+            case span (\x2 -> NonTerminal x2 < level bdd) xs of
+              (ys, xxs') -> do
+                xs' <- case (bdd, xxs') of
+                         (Branch x _ _, x' : xs') | x == x' -> return xs'
+                         (Branch x _ _, _) -> error ("uniformSatM: " ++ show x ++ " should not occur")
+                         (Leaf _, []) -> return []
+                         (Leaf _, _:_) -> error ("uniformSatM: should not happen")
+                (s, func0) <- g xs' bdd
+                let func' !m !gen = do
+#if MIN_VERSION_mwc_random(0,15,0)
+                      vals <- replicateM (length ys) (uniformM gen)
+#else
+                      vals <- replicateM (length ys) (uniform gen)
+#endif
+                      func0 (m `IntMap.union` IntMap.fromList (zip ys vals)) gen
+                return (s `shiftL` length ys, func')
+          g _ (Leaf True) = return (1 :: Integer, \a _gen -> return a)
+          g _ (Leaf False) = return (0 :: Integer, \_a _gen -> error "uniformSatM: should not happen")
+          g xs bdd@(Branch x lo hi) = do
+            m <- H.lookup h bdd
             case m of
               Just ret -> return ret
               Nothing -> do
-                ret <- liftM2 (+) (f xs lo) (f xs hi)
-                H.insert h n ret
-                return ret
-  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs')) bdd
+                (n0, func0) <- f xs lo
+                (n1, func1) <- f xs hi
+                let s = n0 + n1
+                    r :: Double
+                    r = realToFrac (n1 % s)
+                seq r $ return ()
+                let func' !a !gen = do
+                      b <- bernoulli r gen
+                      if b then
+                        func1 (IntMap.insert x True a) gen
+                      else
+                        func0 (IntMap.insert x False a) gen
+                H.insert h bdd (s, func')
+                return (s, func')
+      liftM snd $ f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs0)) bdd0
 
 -- ------------------------------------------------------------------------
 

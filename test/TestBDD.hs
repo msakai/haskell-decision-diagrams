@@ -4,16 +4,24 @@
 module TestBDD (bddTestGroup) where
 
 import Control.Monad
+import Control.Monad.ST
 import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.IORef
 import Data.List
+import qualified Data.Map.Lazy as Map
 import Data.Proxy
 import qualified Data.Set as Set
+import Data.Vector (Vector)
+import Data.Word
+import Statistics.Distribution
+import Statistics.Distribution.ChiSquared (chiSquared)
 import System.IO.Unsafe
+import qualified System.Random.MWC as Rand
 import Test.QuickCheck.Function (apply)
+import Test.QuickCheck.Instances.Vector ()
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
@@ -1096,6 +1104,27 @@ prop_countSat_allSatComplete =
               else
                 -- Note that the number of partial assignments is smaller than the number of total assignments
                 (n > 0) .&&. n === length ps
+
+prop_uniformSatM :: Property
+prop_uniformSatM =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll (arbitrarySmallIntSet `suchThat` ((>= 2) . IntSet.size)) $ \xs ->
+      forAll (arbitraryBDDOver xs `suchThat` ((>= (2::Integer)) . BDD.countSat xs)) $ \(bdd :: BDD o) ->
+        forAll arbitrary $ \(seed :: Vector Word32) ->
+          let m :: Integer
+              m = BDD.countSat xs bdd
+              n = 1000
+              samples = runST $ do
+                gen <- Rand.initialize seed
+                replicateM n $ BDD.uniformSatM xs bdd gen
+              hist_actual = Map.fromListWith (+) [(s, 1 :: Double) | s <- samples]
+              hist_expected = [(s, fromIntegral n / fromIntegral m :: Double) | s <- BDD.allSatComplete xs bdd]
+              chi_sq = sum [(Map.findWithDefault 0 s hist_actual - cnt) ** 2 / cnt | (s, cnt) <- hist_expected]
+              threshold = complQuantile (chiSquared (fromIntegral m - 1)) 0.0001
+           in counterexample (show hist_actual ++ " /= " ++ show (Map.fromList hist_expected)) $
+                and [BDD.evaluate (a IntMap.!) bdd | a <- Map.keys hist_actual]
+                .&&.
+                counterexample ("χ² = " ++ show chi_sq ++ " >= " ++ show threshold) (chi_sq < threshold)
 
 -- ------------------------------------------------------------------------
 
