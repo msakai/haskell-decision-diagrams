@@ -114,6 +114,7 @@ import Control.Exception (assert)
 import Control.Monad
 import Control.Monad.ST
 import Control.Monad.ST.Unsafe
+import Data.Bits (Bits (shiftL))
 import qualified Data.Foldable as Foldable
 import Data.Function (on)
 import Data.Functor.Identity
@@ -932,28 +933,36 @@ allSatComplete = findSatCompleteM
 {-# SPECIALIZE countSat :: ItemOrder a => IntSet -> BDD a -> Int #-}
 {-# SPECIALIZE countSat :: ItemOrder a => IntSet -> BDD a -> Integer #-}
 {-# SPECIALIZE countSat :: ItemOrder a => IntSet -> BDD a -> Natural #-}
--- | Count the number of satisfying (complete) assignment over a given set of variables
+-- | Count the number of satisfying (complete) assignment over a given set of variables.
 --
 -- The set of variables must be a superset of 'support'.
-countSat :: forall a b. (ItemOrder a, Integral b) => IntSet -> BDD a -> b
-countSat xs' bdd = runST $ do
+--
+-- It is polymorphic in return type, but it is recommended to use 'Integer' or 'Natural'
+-- because the size can be larger than fixed integer types such as @Int64@.
+--
+-- >>> countSat (IntSet.fromList [1..128]) (true :: BDD AscOrder)
+-- 340282366920938463463374607431768211456
+-- >>> import Data.Int
+-- >>> maxBound :: Int64
+-- 9223372036854775807
+countSat :: forall a b. (ItemOrder a, Num b, Bits b) => IntSet -> BDD a -> b
+countSat xs bdd = runST $ do
   h <- C.newSized defaultTableSize
   let f _ (Leaf False) = return $ 0
-      f xs (Leaf True) = return $! 2 ^ length xs
-      f [] (Branch x _ _) = error ("countSat: " ++ show x ++ " should not occur")
-      f (x1 : xs) n@(Branch x2 lo hi) = do
-        case compareItem (Proxy :: Proxy a) x1 x2 of
-          GT -> error ("countSat: " ++ show x2 ++ " should not occur")
-          LT -> liftM (2 *) (f xs n) -- inefficient
-          EQ -> do
-            m <- H.lookup h n
-            case m of
-              Just ret -> return ret
+      f ys (Leaf True) = return $! 1 `shiftL` length ys
+      f ys node@(Branch x lo hi) = do
+        case span (\x2 -> compareItem (Proxy :: Proxy a) x2 x == LT) ys of
+          (zs, y' : ys') | x == y' -> do
+            m <- H.lookup h node
+            n <- case m of
+              Just n -> return n
               Nothing -> do
-                ret <- liftM2 (+) (f xs lo) (f xs hi)
-                H.insert h n ret
-                return ret
-  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs')) bdd
+                n <- liftM2 (+) (f ys' lo) (f ys' hi)
+                H.insert h node n
+                return n
+            return $! n `shiftL` length zs
+          (_, _) -> error ("countSat: " ++ show x ++ " should not occur")
+  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs)) bdd
 
 -- ------------------------------------------------------------------------
 
