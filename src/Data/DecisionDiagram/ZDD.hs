@@ -95,6 +95,8 @@ module Data.DecisionDiagram.ZDD
 
   -- * (Co)algebraic structure
   , Sig (..)
+  , pattern SEmpty
+  , pattern SBase
   , inSig
   , outSig
 
@@ -307,9 +309,9 @@ combinations xs k
     n = V.length table
 
     f :: (Int, Int) -> Sig (Int, Int)
-    f (!_, !0) = SBase
+    f (!_, !0) = SLeaf True
     f (!i, !k')
-      | i + k' > n = SEmpty
+      | i + k' > n = SLeaf False
       | otherwise  = SBranch (table V.! i) (i+1, k') (i+1, k'-1)
 
 -- | Set of all subsets whose sum of weights is at least k.
@@ -323,8 +325,8 @@ subsetsAtLeast xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (k <= ub) = SEmpty
-      | i == V.length xs' && 0 >= k = SBase
+      | not (k <= ub) = SLeaf False
+      | i == V.length xs' && 0 >= k = SLeaf True
       | lb >= k = SBranch x (i+1, lb) (i+1, lb) -- all remaining variables are don't-care
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
       where
@@ -342,8 +344,8 @@ subsetsAtMost xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (lb <= k) = SEmpty
-      | i == V.length xs' && 0 <= k = SBase
+      | not (lb <= k) = SLeaf False
+      | i == V.length xs' && 0 <= k = SLeaf True
       | ub <= k = SBranch x (i+1, ub) (i+1, ub) -- all remaining variables are don't-care
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
       where
@@ -365,8 +367,8 @@ subsetsExactly xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (lb <= k && k <= ub) = SEmpty
-      | i == V.length xs' && 0 == k = SBase
+      | not (lb <= k && k <= ub) = SLeaf False
+      | i == V.length xs' && 0 == k = SLeaf True
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
       where
         (lb,ub) = ys V.! i
@@ -385,9 +387,9 @@ subsetsExactlyIntegral xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (lb <= k && k <= ub) = SEmpty
-      | i == V.length xs' && 0 == k = SBase
-      | d /= 0 && k `mod` d /= 0 = SEmpty
+      | not (lb <= k && k <= ub) = SLeaf False
+      | i == V.length xs' && 0 == k = SLeaf True
+      | d /= 0 && k `mod` d /= 0 = SLeaf False
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
       where
         (lb,ub) = ys V.! i
@@ -1019,23 +1021,28 @@ findMaxSum weight =
 
 -- | Signature functor of 'ZDD' type
 data Sig a
-  = SEmpty
-  | SBase
+  = SLeaf !Bool
   | SBranch !Int a a
   deriving (Eq, Ord, Show, Read, Generic, Functor, Foldable, Traversable)
 
 instance Hashable a => Hashable (Sig a)
 
+-- | Synonym of @'SLeaf' False@
+pattern SEmpty :: Sig a
+pattern SEmpty = SLeaf False
+
+-- | Synonym of @'SLeaf' True@
+pattern SBase :: Sig a
+pattern SBase = SLeaf True
+
 -- | 'Sig'-algebra stucture of 'ZDD', \(\mathrm{in}_\mathrm{Sig}\).
 inSig :: Sig (ZDD a) -> ZDD a
-inSig SEmpty = Empty
-inSig SBase = Base
+inSig (SLeaf b) = Leaf b
 inSig (SBranch x lo hi) = Branch x lo hi
 
 -- | 'Sig'-coalgebra stucture of 'ZDD', \(\mathrm{out}_\mathrm{Sig}\).
 outSig :: ZDD a -> Sig (ZDD a)
-outSig Empty = SEmpty
-outSig Base = SBase
+outSig (Leaf b) = SLeaf b
 outSig (Branch x lo hi) = SBranch x lo hi
 
 -- ------------------------------------------------------------------------
@@ -1044,7 +1051,7 @@ type Graph f = IntMap (f Int)
 
 -- | Convert a ZDD into a pointed graph
 --
--- Nodes @0@ and @1@ are reserved for @SEmpty@ and @SBase@ even if
+-- Nodes @0@ and @1@ are reserved for @SLeaf False@ and @SLeaf True@ even if
 -- they are not actually used. Therefore the result may be larger than
 -- 'numNodes' if the leaf nodes are not used.
 toGraph :: ZDD a -> (Graph Sig, Int)
@@ -1059,7 +1066,7 @@ toGraph' bs = runST $ do
   H.insert h Empty 0
   H.insert h Base 1
   counter <- newSTRef 2
-  ref <- newSTRef $ IntMap.fromList [(0, SEmpty), (1, SBase)]
+  ref <- newSTRef $ IntMap.fromList [(0, SLeaf False), (1, SLeaf True)]
 
   let f Empty = return 0
       f Base = return 1
@@ -1092,8 +1099,7 @@ fromGraph' :: Graph Sig -> IntMap (ZDD a)
 fromGraph' g = ret
   where
     ret = IntMap.map f g
-    f SEmpty = Empty
-    f SBase = Base
+    f (SLeaf b) = Leaf b
     f (SBranch x lo hi) =
       case (IntMap.lookup lo ret, IntMap.lookup hi ret) of
         (Nothing, _) -> error ("Data.DecisionDiagram.ZDD.fromGraph': invalid node id " ++ show lo)
