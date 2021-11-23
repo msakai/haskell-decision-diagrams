@@ -22,7 +22,7 @@
 module Data.DecisionDiagram.BDD.Internal.Node
   (
   -- * Low level node type
-    Node (T, F, Branch)
+    Node (T, F, Leaf, Branch)
   , nodeId
 
   , numNodes
@@ -56,11 +56,22 @@ pattern F :: Node
 pattern F <- (unintern -> UF) where
   F = intern UF
 
+pattern Leaf :: Bool -> Node
+pattern Leaf b <- (asBool -> Just b) where
+  Leaf True = T
+  Leaf False = F
+
+asBool :: Node -> Maybe Bool
+asBool T = Just True
+asBool F = Just False
+asBool _ = Nothing
+
 pattern Branch :: Int -> Node -> Node -> Node
 pattern Branch ind lo hi <- (unintern -> UBranch ind lo hi) where
   Branch ind lo hi = intern (UBranch ind lo hi)
 
 {-# COMPLETE T, F, Branch #-}
+{-# COMPLETE Leaf, Branch #-}
 
 data UNode
   = UT

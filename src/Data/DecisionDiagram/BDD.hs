@@ -180,14 +180,7 @@ pattern T :: BDD a
 pattern T = BDD Node.T
 
 pattern Leaf :: Bool -> BDD a
-pattern Leaf b <- (asBool -> Just b) where
-  Leaf True = BDD Node.T
-  Leaf False = BDD Node.F
-
-asBool :: BDD a -> Maybe Bool
-asBool (BDD Node.T) = Just True
-asBool (BDD Node.F) = Just False
-asBool _ = Nothing
+pattern Leaf b = BDD (Node.Leaf b)
 
 -- | Smart constructor that takes the BDD reduction rules into account
 pattern Branch :: Int -> BDD a -> BDD a -> BDD a
@@ -875,6 +868,10 @@ substSet s m = runST $ do
           )
       where
         fixed = IntMap.mapMaybe asBool conditions
+
+    asBool :: BDD a -> Maybe Bool
+    asBool (Leaf b) = Just b
+    asBool _ = Nothing
 
 -- ------------------------------------------------------------------------
 

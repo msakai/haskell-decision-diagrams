@@ -201,14 +201,7 @@ pattern Base :: ZDD a
 pattern Base = ZDD Node.T
 
 pattern Leaf :: Bool -> ZDD a
-pattern Leaf b <- (asBool -> Just b) where
-  Leaf True = ZDD Node.T
-  Leaf False = ZDD Node.F
-
-asBool :: ZDD a -> Maybe Bool
-asBool (ZDD Node.T) = Just True
-asBool (ZDD Node.F) = Just False
-asBool _ = Nothing
+pattern Leaf b = ZDD (Node.Leaf b)
 
 -- | Smart constructor that takes the ZDD reduction rules into account
 pattern Branch :: Int -> ZDD a -> ZDD a -> ZDD a
