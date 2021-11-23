@@ -32,7 +32,9 @@
 module Data.DecisionDiagram.ZDD
   (
   -- * ZDD type
-    ZDD (Empty, Base, Branch)
+    ZDD (Leaf, Branch)
+  , pattern Empty
+  , pattern Base
 
   -- * Item ordering
   , ItemOrder (..)
@@ -188,11 +190,23 @@ defaultTableSize = 256
 newtype ZDD a = ZDD Node.Node
   deriving (Eq, Hashable)
 
+-- | Synonym of @'Leaf' False@
 pattern Empty :: ZDD a
 pattern Empty = ZDD Node.F
 
+-- | Synonym of @'Leaf' True@
 pattern Base :: ZDD a
 pattern Base = ZDD Node.T
+
+pattern Leaf :: Bool -> ZDD a
+pattern Leaf b <- (asBool -> Just b) where
+  Leaf True = ZDD Node.T
+  Leaf False = ZDD Node.F
+
+asBool :: ZDD a -> Maybe Bool
+asBool (ZDD Node.T) = Just True
+asBool (ZDD Node.F) = Just False
+asBool _ = Nothing
 
 -- | Smart constructor that takes the ZDD reduction rules into account
 pattern Branch :: Int -> ZDD a -> ZDD a -> ZDD a
@@ -201,6 +215,7 @@ pattern Branch x lo hi <- ZDD (Node.Branch x (ZDD -> lo) (ZDD -> hi)) where
   Branch x (ZDD lo) (ZDD hi) = ZDD (Node.Branch x lo hi)
 
 {-# COMPLETE Empty, Base, Branch #-}
+{-# COMPLETE Leaf, Branch #-}
 
 -- Hack for avoiding spurious incomplete patterns warning on the above Branch pattern definition.
 #if __GLASGOW_HASKELL__ < 810
