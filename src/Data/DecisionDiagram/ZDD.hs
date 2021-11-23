@@ -1,8 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
@@ -32,7 +30,9 @@
 module Data.DecisionDiagram.ZDD
   (
   -- * ZDD type
-    ZDD (Empty, Base, Branch)
+    ZDD (Leaf, Branch)
+  , pattern Empty
+  , pattern Base
 
   -- * Item ordering
   , ItemOrder (..)
@@ -93,6 +93,8 @@ module Data.DecisionDiagram.ZDD
 
   -- * (Co)algebraic structure
   , Sig (..)
+  , pattern SEmpty
+  , pattern SBase
   , inSig
   , outSig
 
@@ -139,7 +141,6 @@ import Control.Monad
 import Control.Monad.Primitive
 #endif
 import Control.Monad.ST
-import Control.Monad.ST.Unsafe
 import qualified Data.Foldable as Foldable
 import Data.Function (on)
 import Data.Functor.Identity
@@ -163,7 +164,6 @@ import qualified Data.Set as Set
 import Data.STRef
 import qualified Data.Vector as V
 import qualified GHC.Exts as Exts
-import GHC.Generics (Generic)
 import Numeric.Natural
 #if MIN_VERSION_mwc_random(0,15,0)
 import System.Random.Stateful (StatefulGen (..))
@@ -174,6 +174,7 @@ import System.Random.MWC.Distributions (bernoulli)
 import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
+import Data.DecisionDiagram.BDD.Internal.Node (Sig (..))
 import qualified Data.DecisionDiagram.BDD.Internal.Node as Node
 import qualified Data.DecisionDiagram.BDD as BDD
 
@@ -188,11 +189,16 @@ defaultTableSize = 256
 newtype ZDD a = ZDD Node.Node
   deriving (Eq, Hashable)
 
+-- | Synonym of @'Leaf' False@
 pattern Empty :: ZDD a
-pattern Empty = ZDD Node.F
+pattern Empty = Leaf False
 
+-- | Synonym of @'Leaf' True@
 pattern Base :: ZDD a
-pattern Base = ZDD Node.T
+pattern Base = Leaf True
+
+pattern Leaf :: Bool -> ZDD a
+pattern Leaf b = ZDD (Node.Leaf b)
 
 -- | Smart constructor that takes the ZDD reduction rules into account
 pattern Branch :: Int -> ZDD a -> ZDD a -> ZDD a
@@ -201,6 +207,7 @@ pattern Branch x lo hi <- ZDD (Node.Branch x (ZDD -> lo) (ZDD -> hi)) where
   Branch x (ZDD lo) (ZDD hi) = ZDD (Node.Branch x lo hi)
 
 {-# COMPLETE Empty, Base, Branch #-}
+{-# COMPLETE Leaf, Branch #-}
 
 -- Hack for avoiding spurious incomplete patterns warning on the above Branch pattern definition.
 #if __GLASGOW_HASKELL__ < 810
@@ -292,9 +299,9 @@ combinations xs k
     n = V.length table
 
     f :: (Int, Int) -> Sig (Int, Int)
-    f (!_, !0) = SBase
+    f (!_, !0) = SLeaf True
     f (!i, !k')
-      | i + k' > n = SEmpty
+      | i + k' > n = SLeaf False
       | otherwise  = SBranch (table V.! i) (i+1, k') (i+1, k'-1)
 
 -- | Set of all subsets whose sum of weights is at least k.
@@ -308,8 +315,8 @@ subsetsAtLeast xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (k <= ub) = SEmpty
-      | i == V.length xs' && 0 >= k = SBase
+      | not (k <= ub) = SLeaf False
+      | i == V.length xs' && 0 >= k = SLeaf True
       | lb >= k = SBranch x (i+1, lb) (i+1, lb) -- all remaining variables are don't-care
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
       where
@@ -327,8 +334,8 @@ subsetsAtMost xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (lb <= k) = SEmpty
-      | i == V.length xs' && 0 <= k = SBase
+      | not (lb <= k) = SLeaf False
+      | i == V.length xs' && 0 <= k = SLeaf True
       | ub <= k = SBranch x (i+1, ub) (i+1, ub) -- all remaining variables are don't-care
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
       where
@@ -350,8 +357,8 @@ subsetsExactly xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (lb <= k && k <= ub) = SEmpty
-      | i == V.length xs' && 0 == k = SBase
+      | not (lb <= k && k <= ub) = SLeaf False
+      | i == V.length xs' && 0 == k = SLeaf True
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
       where
         (lb,ub) = ys V.! i
@@ -370,9 +377,9 @@ subsetsExactlyIntegral xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (lb <= k && k <= ub) = SEmpty
-      | i == V.length xs' && 0 == k = SBase
-      | d /= 0 && k `mod` d /= 0 = SEmpty
+      | not (lb <= k && k <= ub) = SLeaf False
+      | i == V.length xs' && 0 == k = SLeaf True
+      | d /= 0 && k `mod` d /= 0 = SLeaf False
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
       where
         (lb,ub) = ys V.! i
@@ -430,8 +437,7 @@ subset0 var zdd = runST $ do
 insert :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
 insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
-    f [] Empty = Base
-    f [] Base = Base
+    f [] (Leaf _) = Base
     f [] (Branch top p0 p1) = Branch top (f [] p0) p1
     f (y : ys) Empty = Branch y Empty (f ys Empty)
     f (y : ys) Base = Branch y Base (f ys Empty)
@@ -448,11 +454,9 @@ insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
 delete :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
 delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
-    f [] Empty = Empty
-    f [] Base = Empty
+    f [] (Leaf _) = Empty
     f [] (Branch top p0 p1) = Branch top (f [] p0) p1
-    f (_ : _) Empty = Empty
-    f (_ : _) Base = Base
+    f (_ : _) l@(Leaf _) = l
     f yys@(y : ys) p@(Branch top p0 p1) =
       case compareItem (Proxy :: Proxy a) y top of
         LT -> p
@@ -490,8 +494,7 @@ mapDelete :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 mapDelete var zdd = runST $ do
   unionOp <- mkUnionOp
   h <- C.newSized defaultTableSize
-  let f Base = return Base
-      f Empty = return Empty
+  let f l@(Leaf _) = return l
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
@@ -700,14 +703,13 @@ minimalHittingSetsToda :: forall a. ItemOrder a => ZDD a -> ZDD a
 minimalHittingSetsToda = minimal . hittingSetsBDD
 
 hittingSetsBDD :: forall a. ItemOrder a => ZDD a -> BDD.BDD a
-hittingSetsBDD = fold' BDD.true BDD.false (\top h0 h1 -> h0 BDD..&&. BDD.Branch top h1 BDD.true)
+hittingSetsBDD = fold' (\top h0 h1 -> h0 BDD..&&. BDD.Branch top h1 BDD.true) (\b -> BDD.Leaf (not b))
 
 minimal :: forall a. ItemOrder a => BDD.BDD a -> ZDD a
 minimal bdd = runST $ do
   diffOp <- mkDifferenceOp
   h <- C.newSized defaultTableSize
-  let f (BDD.Leaf False) = return Empty
-      f (BDD.Leaf True) = return Base
+  let f (BDD.Leaf b) = return (Leaf b)
       f p@(BDD.Branch x lo hi) = do
         m <- H.lookup h p
         case m of
@@ -766,7 +768,7 @@ null = (empty ==)
 -- 9223372036854775807
 --
 size :: (Integral b) => ZDD a -> b
-size = fold' 0 1 (\_ n0 n1 -> n0 + n1)
+size = fold' (\_ n0 n1 -> n0 + n1) (\b -> if b then 1 else 0)
 
 -- | @(s1 `isSubsetOf` s2)@ indicates whether @s1@ is a subset of @s2@.
 isSubsetOf :: ItemOrder a => ZDD a -> ZDD a -> Bool
@@ -793,7 +795,7 @@ numNodes (ZDD node) = Node.numNodes node
 -- >>> flatten (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [3,4]]) :: ZDD AscOrder)
 -- fromList [1,2,3,4]
 flatten :: ItemOrder a => ZDD a -> IntSet
-flatten = fold' IntSet.empty IntSet.empty (\top lo hi -> IntSet.insert top (lo `IntSet.union` hi))
+flatten = fold' (\top lo hi -> IntSet.insert top (lo `IntSet.union` hi)) (const IntSet.empty)
 
 -- | Create a ZDD from a set of 'IntSet'
 fromSetOfIntSets :: forall a. ItemOrder a => Set IntSet -> ZDD a
@@ -801,7 +803,7 @@ fromSetOfIntSets = fromListOfIntSets . Set.toList
 
 -- | Convert the family to a set of 'IntSet'.
 toSetOfIntSets :: ZDD a -> Set IntSet
-toSetOfIntSets = fold' Set.empty (Set.singleton IntSet.empty) (\top lo hi -> lo <> Set.map (IntSet.insert top) hi)
+toSetOfIntSets = fold' (\top lo hi -> lo <> Set.map (IntSet.insert top) hi) (\b -> if b then Set.singleton IntSet.empty else Set.empty)
 
 -- | Create a ZDD from a list of 'IntSet'
 fromListOfIntSets :: forall a. ItemOrder a => [IntSet] -> ZDD a
@@ -812,7 +814,7 @@ fromListOfIntSets = fromListOfSortedList . map f
 
 -- | Convert the family to a list of 'IntSet'.
 toListOfIntSets :: ZDD a -> [IntSet]
-toListOfIntSets = g . fold' (False,[]) (True,[]) f
+toListOfIntSets = g . fold' f (\b -> (b,[]))
   where
     f top (b, xss) hi = (b, map (IntSet.insert top) (g hi) <> xss)
     g (True, xss) = IntSet.empty : xss
@@ -826,44 +828,15 @@ fromListOfSortedList = unions . map f
 
 -- | Fold over the graph structure of the ZDD.
 --
--- It takes values for substituting 'empty' and 'base',
--- and a function for substiting non-terminal node.
+-- It takes two functions that substitute 'Branch'  and 'Leaf' respectively.
 --
 -- Note that its type is isomorphic to @('Sig' b -> b) -> ZDD a -> b@.
-fold :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
-fold ff tt br zdd = runST $ do
-  h <- C.newSized defaultTableSize
-  let f Empty = return ff
-      f Base = return tt
-      f p@(Branch top p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            r0 <- unsafeInterleaveST $ f p0
-            r1 <- unsafeInterleaveST $ f p1
-            let ret = br top r0 r1
-            H.insert h p ret  -- Note that H.insert is value-strict
-            return ret
-  f zdd
+fold :: (Int -> b -> b -> b) -> (Bool -> b) -> ZDD a -> b
+fold br lf (ZDD node) = Node.fold br lf node
 
 -- | Strict version of 'fold'
-fold' :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
-fold' !ff !tt br zdd = runST $ do
-  h <- C.newSized defaultTableSize
-  let f Empty = return ff
-      f Base = return tt
-      f p@(Branch top p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            r0 <- f p0
-            r1 <- f p1
-            let ret = br top r0 r1
-            H.insert h p ret  -- Note that H.insert is value-strict
-            return ret
-  f zdd
+fold' :: (Int -> b -> b -> b) -> (Bool -> b) -> ZDD a -> b
+fold' br lf (ZDD node) = Node.fold' br lf node
 
 -- ------------------------------------------------------------------------
 
@@ -972,7 +945,7 @@ uniformM zdd = func
 findMinSum :: forall a w. (ItemOrder a, Num w, Ord w) => (Int -> w) -> ZDD a -> (w, IntSet)
 findMinSum weight =
   fromMaybe (error "Data.DecisionDiagram.ZDD.findMinSum: empty ZDD") .
-    fold' Nothing (Just (0, IntSet.empty)) f
+    fold' f (\b -> if b then Just (0, IntSet.empty) else Nothing)
   where
     f _ _ Nothing = undefined
     f x z1 (Just (w2, s2)) =
@@ -994,7 +967,7 @@ findMinSum weight =
 findMaxSum :: forall a w. (ItemOrder a, Num w, Ord w) => (Int -> w) -> ZDD a -> (w, IntSet)
 findMaxSum weight =
   fromMaybe (error "Data.DecisionDiagram.ZDD.findMinSum: empty ZDD") .
-    fold' Nothing (Just (0, IntSet.empty)) f
+    fold' f (\b -> if b then Just (0, IntSet.empty) else Nothing)
   where
     f _ _ Nothing = undefined
     f x z1 (Just (w2, s2)) =
@@ -1007,25 +980,22 @@ findMaxSum weight =
 
 -- ------------------------------------------------------------------------
 
--- | Signature functor of 'ZDD' type
-data Sig a
-  = SEmpty
-  | SBase
-  | SBranch !Int a a
-  deriving (Eq, Ord, Show, Read, Generic, Functor, Foldable, Traversable)
+-- | Synonym of @'SLeaf' False@
+pattern SEmpty :: Sig a
+pattern SEmpty = SLeaf False
 
-instance Hashable a => Hashable (Sig a)
+-- | Synonym of @'SLeaf' True@
+pattern SBase :: Sig a
+pattern SBase = SLeaf True
 
 -- | 'Sig'-algebra stucture of 'ZDD', \(\mathrm{in}_\mathrm{Sig}\).
 inSig :: Sig (ZDD a) -> ZDD a
-inSig SEmpty = Empty
-inSig SBase = Base
+inSig (SLeaf b) = Leaf b
 inSig (SBranch x lo hi) = Branch x lo hi
 
 -- | 'Sig'-coalgebra stucture of 'ZDD', \(\mathrm{out}_\mathrm{Sig}\).
 outSig :: ZDD a -> Sig (ZDD a)
-outSig Empty = SEmpty
-outSig Base = SBase
+outSig (Leaf b) = SLeaf b
 outSig (Branch x lo hi) = SBranch x lo hi
 
 -- ------------------------------------------------------------------------
@@ -1034,7 +1004,7 @@ type Graph f = IntMap (f Int)
 
 -- | Convert a ZDD into a pointed graph
 --
--- Nodes @0@ and @1@ are reserved for @SEmpty@ and @SBase@ even if
+-- Nodes @0@ and @1@ are reserved for @SLeaf False@ and @SLeaf True@ even if
 -- they are not actually used. Therefore the result may be larger than
 -- 'numNodes' if the leaf nodes are not used.
 toGraph :: ZDD a -> (Graph Sig, Int)
@@ -1049,7 +1019,7 @@ toGraph' bs = runST $ do
   H.insert h Empty 0
   H.insert h Base 1
   counter <- newSTRef 2
-  ref <- newSTRef $ IntMap.fromList [(0, SEmpty), (1, SBase)]
+  ref <- newSTRef $ IntMap.fromList [(0, SLeaf False), (1, SLeaf True)]
 
   let f Empty = return 0
       f Base = return 1
@@ -1082,8 +1052,7 @@ fromGraph' :: Graph Sig -> IntMap (ZDD a)
 fromGraph' g = ret
   where
     ret = IntMap.map f g
-    f SEmpty = Empty
-    f SBase = Base
+    f (SLeaf b) = Leaf b
     f (SBranch x lo hi) =
       case (IntMap.lookup lo ret, IntMap.lookup hi ret) of
         (Nothing, _) -> error ("Data.DecisionDiagram.ZDD.fromGraph': invalid node id " ++ show lo)

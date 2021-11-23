@@ -698,7 +698,7 @@ case_fold_laziness = do
           error "unused value should not be evaluated"
         else
           lo
-  seq (ZDD.fold False True f bdd) $ return ()
+  seq (ZDD.fold f id bdd) $ return ()
 
 case_fold'_strictness :: Assertion
 case_fold'_strictness = do
@@ -708,7 +708,7 @@ case_fold'_strictness = do
       f x lo _hi = unsafePerformIO $ do
         when (x==2) $ writeIORef ref True
         return lo
-  seq (ZDD.fold' False True f bdd) $ do
+  seq (ZDD.fold' f id bdd) $ do
     flag <- readIORef ref
     assertBool "unused value should be evaluated" flag
 
@@ -716,7 +716,7 @@ prop_fold_inSig :: Property
 prop_fold_inSig =
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(zdd :: ZDD o) ->
-      ZDD.fold (ZDD.inSig ZDD.SEmpty) (ZDD.inSig ZDD.SBase) (\x lo hi -> ZDD.inSig (ZDD.SBranch x lo hi)) zdd
+      ZDD.fold (\x lo hi -> ZDD.inSig (ZDD.SBranch x lo hi)) (ZDD.inSig . ZDD.SLeaf) zdd
       ===
       zdd
 
@@ -724,7 +724,7 @@ prop_fold'_inSig :: Property
 prop_fold'_inSig =
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(zdd :: ZDD o) ->
-      ZDD.fold' (ZDD.inSig ZDD.SEmpty) (ZDD.inSig ZDD.SBase) (\x lo hi -> ZDD.inSig (ZDD.SBranch x lo hi)) zdd
+      ZDD.fold' (\x lo hi -> ZDD.inSig (ZDD.SBranch x lo hi)) (ZDD.inSig . ZDD.SLeaf) zdd
       ===
       zdd
 

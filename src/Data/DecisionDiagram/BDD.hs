@@ -1,8 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
@@ -143,7 +141,6 @@ import Data.Proxy
 import Data.Ratio
 import Data.STRef
 import qualified Data.Vector as V
-import GHC.Generics (Generic)
 import Numeric.Natural
 #if MIN_VERSION_mwc_random(0,15,0)
 import System.Random.MWC (Uniform (..))
@@ -155,6 +152,7 @@ import System.Random.MWC.Distributions (bernoulli)
 import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
+import Data.DecisionDiagram.BDD.Internal.Node (Sig (..))
 import qualified Data.DecisionDiagram.BDD.Internal.Node as Node
 
 infixr 3 .&&.
@@ -174,20 +172,13 @@ newtype BDD a = BDD Node.Node
   deriving (Eq, Hashable)
 
 pattern F :: BDD a
-pattern F = BDD Node.F
+pattern F = Leaf False
 
 pattern T :: BDD a
-pattern T = BDD Node.T
+pattern T = Leaf True
 
 pattern Leaf :: Bool -> BDD a
-pattern Leaf b <- (asBool -> Just b) where
-  Leaf True = BDD Node.T
-  Leaf False = BDD Node.F
-
-asBool :: BDD a -> Maybe Bool
-asBool (BDD Node.T) = Just True
-asBool (BDD Node.F) = Just False
-asBool _ = Nothing
+pattern Leaf b = BDD (Node.Leaf b)
 
 -- | Smart constructor that takes the BDD reduction rules into account
 pattern Branch :: Int -> BDD a -> BDD a -> BDD a
@@ -599,49 +590,20 @@ existsUniqueSet vars bdd = runST $ do
 
 -- | Fold over the graph structure of the BDD.
 --
--- It takes values for substituting 'false' and 'true',
--- and a function for substiting non-terminal nodes ('Branch').
+-- It takes two functions that substitute 'Branch'  and 'Leaf' respectively.
 --
 -- Note that its type is isomorphic to @('Sig' b -> b) -> BDD a -> b@.
-fold :: b -> b -> (Int -> b -> b -> b) -> BDD a -> b
-fold ff tt br bdd = runST $ do
-  h <- C.newSized defaultTableSize
-  let f F = return ff
-      f T = return tt
-      f p@(Branch top lo hi) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            r0 <- unsafeInterleaveST $ f lo
-            r1 <- unsafeInterleaveST $ f hi
-            let ret = br top r0 r1
-            H.insert h p ret  -- Note that H.insert is value-strict
-            return ret
-  f bdd
+fold :: (Int -> b -> b -> b) -> (Bool -> b) -> BDD a -> b
+fold br lf (BDD node) = Node.fold br lf node
 
 -- | Strict version of 'fold'
-fold' :: b -> b -> (Int -> b -> b -> b) -> BDD a -> b
-fold' ff tt br bdd = runST $ do
-  op <- mkFold'Op ff tt br
-  op bdd
+fold' :: (Int -> b -> b -> b) -> (Bool -> b) -> BDD a -> b
+fold' br lf (BDD node) = Node.fold' br lf node
 
-mkFold'Op :: b -> b -> (Int -> b -> b -> b) -> ST s (BDD a -> ST s b)
-mkFold'Op !ff !tt br = do
-  h <- C.newSized defaultTableSize
-  let f F = return ff
-      f T = return tt
-      f p@(Branch top lo hi) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            r0 <- f lo
-            r1 <- f hi
-            let ret = br top r0 r1
-            H.insert h p ret  -- Note that H.insert is value-strict
-            return ret
-  return f
+mkFold'Op :: (Int -> b -> b -> b) -> (Bool -> b) -> ST s (BDD a -> ST s b)
+mkFold'Op br lf = do
+  op <- Node.mkFold'Op br lf
+  return $ \(BDD node) -> op node
 
 -- ------------------------------------------------------------------------
 
@@ -688,9 +650,10 @@ support bdd = runST $ do
   op bdd
 
 mkSupportOp :: ST s (BDD a -> ST s IntSet)
-mkSupportOp = mkFold'Op IntSet.empty IntSet.empty f
+mkSupportOp = mkFold'Op f g
   where
     f x lo hi = IntSet.insert x (lo `IntSet.union` hi)
+    g _ = IntSet.empty
 
 -- | Evaluate a boolean function represented as BDD under the valuation
 -- given by @(Int -> Bool)@, i.e. it lifts a valuation function from
@@ -878,6 +841,10 @@ substSet s m = runST $ do
       where
         fixed = IntMap.mapMaybe asBool conditions
 
+    asBool :: BDD a -> Maybe Bool
+    asBool (Leaf b) = Just b
+    asBool _ = Nothing
+
 -- ------------------------------------------------------------------------
 
 -- | Least fixed point
@@ -903,9 +870,10 @@ gfp f = go true
 -- ------------------------------------------------------------------------
 
 findSatM :: MonadPlus m => BDD a -> m (IntMap Bool)
-findSatM = fold mzero (return IntMap.empty) f
+findSatM = fold f g
   where
     f x lo hi = mplus (liftM (IntMap.insert x False) lo) (liftM (IntMap.insert x True) hi)
+    g b = if b then return IntMap.empty else mzero
 
 -- | Find one satisfying partial assignment
 anySat :: BDD a -> Maybe (IntMap Bool)
@@ -1053,14 +1021,6 @@ uniformSatM xs0 bdd0 = func IntMap.empty
       liftM snd $ f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs0)) bdd0
 
 -- ------------------------------------------------------------------------
-
--- | Signature functor of 'BDD' type
-data Sig a
-  = SLeaf !Bool
-  | SBranch !Int a a
-  deriving (Eq, Ord, Show, Read, Generic, Functor, Foldable, Traversable)
-
-instance Hashable a => Hashable (Sig a)
 
 -- | 'Sig'-algebra stucture of 'BDD', \(\mathrm{in}_\mathrm{Sig}\).
 inSig :: Sig (BDD a) -> BDD a
