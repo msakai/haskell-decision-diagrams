@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -26,6 +27,9 @@ module Data.DecisionDiagram.BDD.Internal.Node
   , nodeId
 
   , numNodes
+
+  -- * (Co)algebraic structure
+  , Sig (..)
   ) where
 
 import Control.Monad
@@ -124,5 +128,15 @@ numNodes node0 = runST $ do
               _ -> return ()
   f node0
   liftM length $ H.toList h
+
+-- ------------------------------------------------------------------------
+
+-- | Signature functor of binary decision trees, BDD, and ZDD.
+data Sig a
+  = SLeaf !Bool
+  | SBranch !Int a a
+  deriving (Eq, Ord, Show, Read, Generic, Functor, Foldable, Traversable)
+
+instance Hashable a => Hashable (Sig a)
 
 -- ------------------------------------------------------------------------

@@ -1,8 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
@@ -167,7 +165,6 @@ import qualified Data.Set as Set
 import Data.STRef
 import qualified Data.Vector as V
 import qualified GHC.Exts as Exts
-import GHC.Generics (Generic)
 import Numeric.Natural
 #if MIN_VERSION_mwc_random(0,15,0)
 import System.Random.Stateful (StatefulGen (..))
@@ -178,6 +175,7 @@ import System.Random.MWC.Distributions (bernoulli)
 import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
+import Data.DecisionDiagram.BDD.Internal.Node (Sig (..))
 import qualified Data.DecisionDiagram.BDD.Internal.Node as Node
 import qualified Data.DecisionDiagram.BDD as BDD
 
@@ -1008,14 +1006,6 @@ findMaxSum weight =
         s2' = IntSet.insert x s2
 
 -- ------------------------------------------------------------------------
-
--- | Signature functor of 'ZDD' type
-data Sig a
-  = SLeaf !Bool
-  | SBranch !Int a a
-  deriving (Eq, Ord, Show, Read, Generic, Functor, Foldable, Traversable)
-
-instance Hashable a => Hashable (Sig a)
 
 -- | Synonym of @'SLeaf' False@
 pattern SEmpty :: Sig a
