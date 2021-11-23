@@ -594,42 +594,16 @@ existsUniqueSet vars bdd = runST $ do
 --
 -- Note that its type is isomorphic to @('Sig' b -> b) -> BDD a -> b@.
 fold :: (Int -> b -> b -> b) -> (Bool -> b) -> BDD a -> b
-fold br lf bdd = runST $ do
-  h <- C.newSized defaultTableSize
-  let f (Leaf b) = return (lf b)
-      f p@(Branch top lo hi) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            r0 <- unsafeInterleaveST $ f lo
-            r1 <- unsafeInterleaveST $ f hi
-            let ret = br top r0 r1
-            H.insert h p ret  -- Note that H.insert is value-strict
-            return ret
-  f bdd
+fold br lf (BDD node) = Node.fold br lf node
 
 -- | Strict version of 'fold'
 fold' :: (Int -> b -> b -> b) -> (Bool -> b) -> BDD a -> b
-fold' br lf bdd = runST $ do
-  op <- mkFold'Op br lf
-  op bdd
+fold' br lf (BDD node) = Node.fold' br lf node
 
 mkFold'Op :: (Int -> b -> b -> b) -> (Bool -> b) -> ST s (BDD a -> ST s b)
 mkFold'Op br lf = do
-  h <- C.newSized defaultTableSize
-  let f (Leaf b) = return $! lf b
-      f p@(Branch top lo hi) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            r0 <- f lo
-            r1 <- f hi
-            let ret = br top r0 r1
-            H.insert h p ret  -- Note that H.insert is value-strict
-            return ret
-  return f
+  op <- Node.mkFold'Op br lf
+  return $ \(BDD node) -> op node
 
 -- ------------------------------------------------------------------------
 

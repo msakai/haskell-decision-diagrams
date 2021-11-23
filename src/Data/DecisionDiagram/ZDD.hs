@@ -141,7 +141,6 @@ import Control.Monad
 import Control.Monad.Primitive
 #endif
 import Control.Monad.ST
-import Control.Monad.ST.Unsafe
 import qualified Data.Foldable as Foldable
 import Data.Function (on)
 import Data.Functor.Identity
@@ -833,37 +832,11 @@ fromListOfSortedList = unions . map f
 --
 -- Note that its type is isomorphic to @('Sig' b -> b) -> ZDD a -> b@.
 fold :: (Int -> b -> b -> b) -> (Bool -> b) -> ZDD a -> b
-fold br lf zdd = runST $ do
-  h <- C.newSized defaultTableSize
-  let f (Leaf b) = return (lf b)
-      f p@(Branch top p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            r0 <- unsafeInterleaveST $ f p0
-            r1 <- unsafeInterleaveST $ f p1
-            let ret = br top r0 r1
-            H.insert h p ret  -- Note that H.insert is value-strict
-            return ret
-  f zdd
+fold br lf (ZDD node) = Node.fold br lf node
 
 -- | Strict version of 'fold'
 fold' :: (Int -> b -> b -> b) -> (Bool -> b) -> ZDD a -> b
-fold' br lf zdd = runST $ do
-  h <- C.newSized defaultTableSize
-  let f (Leaf b) = return $! lf b
-      f p@(Branch top p0 p1) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            r0 <- f p0
-            r1 <- f p1
-            let ret = br top r0 r1
-            H.insert h p ret  -- Note that H.insert is value-strict
-            return ret
-  f zdd
+fold' br lf (ZDD node) = Node.fold' br lf node
 
 -- ------------------------------------------------------------------------
 

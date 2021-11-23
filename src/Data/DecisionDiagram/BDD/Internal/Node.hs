@@ -28,12 +28,18 @@ module Data.DecisionDiagram.BDD.Internal.Node
 
   , numNodes
 
+  -- * Fold
+  , fold
+  , fold'
+  , mkFold'Op
+
   -- * (Co)algebraic structure
   , Sig (..)
   ) where
 
 import Control.Monad
 import Control.Monad.ST
+import Control.Monad.ST.Unsafe
 import Data.Hashable
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
@@ -140,3 +146,49 @@ data Sig a
 instance Hashable a => Hashable (Sig a)
 
 -- ------------------------------------------------------------------------
+
+-- | Fold over the graph structure of Node.
+--
+-- It takes two functions that substitute 'Branch'  and 'Leaf' respectively.
+--
+-- Note that its type is isomorphic to @('Sig' a -> a) -> 'Node' -> a@.
+fold :: (Int -> a -> a -> a) -> (Bool -> a) -> Node -> a
+fold br lf bdd = runST $ do
+  h <- C.newSized defaultTableSize
+  let f (Leaf b) = return (lf b)
+      f p@(Branch top lo hi) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            r0 <- unsafeInterleaveST $ f lo
+            r1 <- unsafeInterleaveST $ f hi
+            let ret = br top r0 r1
+            H.insert h p ret  -- Note that H.insert is value-strict
+            return ret
+  f bdd
+
+-- | Strict version of 'fold'
+fold' :: (Int -> a -> a -> a) -> (Bool -> a) -> Node -> a
+fold' br lf bdd = runST $ do
+  op <- mkFold'Op br lf
+  op bdd
+
+mkFold'Op :: (Int -> a -> a -> a) -> (Bool -> a) -> ST s (Node -> ST s a)
+mkFold'Op br lf = do
+  h <- C.newSized defaultTableSize
+  let f (Leaf b) = return $! lf b
+      f p@(Branch top lo hi) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            r0 <- f lo
+            r1 <- f hi
+            let ret = br top r0 r1
+            H.insert h p ret  -- Note that H.insert is value-strict
+            return ret
+  return f
+
+-- ------------------------------------------------------------------------
+
