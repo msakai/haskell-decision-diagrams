@@ -599,15 +599,13 @@ existsUniqueSet vars bdd = runST $ do
 
 -- | Fold over the graph structure of the BDD.
 --
--- It takes values for substituting 'false' and 'true',
--- and a function for substiting non-terminal nodes ('Branch').
+-- It takes two functions that substitute 'Branch'  and 'Leaf' respectively.
 --
 -- Note that its type is isomorphic to @('Sig' b -> b) -> BDD a -> b@.
-fold :: b -> b -> (Int -> b -> b -> b) -> BDD a -> b
-fold ff tt br bdd = runST $ do
+fold :: (Int -> b -> b -> b) -> (Bool -> b) -> BDD a -> b
+fold br lf bdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f F = return ff
-      f T = return tt
+  let f (Leaf b) = return (lf b)
       f p@(Branch top lo hi) = do
         m <- H.lookup h p
         case m of
@@ -621,16 +619,15 @@ fold ff tt br bdd = runST $ do
   f bdd
 
 -- | Strict version of 'fold'
-fold' :: b -> b -> (Int -> b -> b -> b) -> BDD a -> b
-fold' ff tt br bdd = runST $ do
-  op <- mkFold'Op ff tt br
+fold' :: (Int -> b -> b -> b) -> (Bool -> b) -> BDD a -> b
+fold' br lf bdd = runST $ do
+  op <- mkFold'Op br lf
   op bdd
 
-mkFold'Op :: b -> b -> (Int -> b -> b -> b) -> ST s (BDD a -> ST s b)
-mkFold'Op !ff !tt br = do
+mkFold'Op :: (Int -> b -> b -> b) -> (Bool -> b) -> ST s (BDD a -> ST s b)
+mkFold'Op br lf = do
   h <- C.newSized defaultTableSize
-  let f F = return ff
-      f T = return tt
+  let f (Leaf b) = return $! lf b
       f p@(Branch top lo hi) = do
         m <- H.lookup h p
         case m of
@@ -688,9 +685,10 @@ support bdd = runST $ do
   op bdd
 
 mkSupportOp :: ST s (BDD a -> ST s IntSet)
-mkSupportOp = mkFold'Op IntSet.empty IntSet.empty f
+mkSupportOp = mkFold'Op f g
   where
     f x lo hi = IntSet.insert x (lo `IntSet.union` hi)
+    g _ = IntSet.empty
 
 -- | Evaluate a boolean function represented as BDD under the valuation
 -- given by @(Int -> Bool)@, i.e. it lifts a valuation function from
@@ -903,9 +901,10 @@ gfp f = go true
 -- ------------------------------------------------------------------------
 
 findSatM :: MonadPlus m => BDD a -> m (IntMap Bool)
-findSatM = fold mzero (return IntMap.empty) f
+findSatM = fold f g
   where
     f x lo hi = mplus (liftM (IntMap.insert x False) lo) (liftM (IntMap.insert x True) hi)
+    g b = if b then return IntMap.empty else mzero
 
 -- | Find one satisfying partial assignment
 anySat :: BDD a -> Maybe (IntMap Bool)
