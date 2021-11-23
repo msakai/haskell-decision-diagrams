@@ -262,14 +262,14 @@ zddCase2 _ Base Empty = ZDDCase2EQ2 True False
 zddCase2 _ Empty Base = ZDDCase2EQ2 False True
 zddCase2 _ Empty Empty = ZDDCase2EQ2 False False
 
--- | The empty set (∅).
+-- | The empty family (∅).
 --
 -- >>> toSetOfIntSets (empty :: ZDD AscOrder)
 -- fromList []
 empty :: ZDD a
 empty = Empty
 
--- | The set containing only the empty set ({∅}).
+-- | The family containing only the empty set ({∅}).
 --
 -- >>> toSetOfIntSets (base :: ZDD AscOrder)
 -- fromList [fromList []]
@@ -749,7 +749,7 @@ member' _ _ = False
 notMember :: forall a. (ItemOrder a) => IntSet -> ZDD a -> Bool
 notMember xs = not . member xs
 
--- | Is this the empty set?
+-- | Is this the empty family?
 null :: ZDD a -> Bool
 null = (empty ==)
 
@@ -770,15 +770,15 @@ null = (empty ==)
 size :: (Integral b) => ZDD a -> b
 size = fold' (\_ n0 n1 -> n0 + n1) (\b -> if b then 1 else 0)
 
--- | @(s1 `isSubsetOf` s2)@ indicates whether @s1@ is a subset of @s2@.
+-- | @(s1 \`isSubsetOf\` s2)@ indicates whether @s1@ is a subset of @s2@.
 isSubsetOf :: ItemOrder a => ZDD a -> ZDD a -> Bool
 isSubsetOf a b = union a b == b
 
--- | @(s1 `isProperSubsetOf` s2)@ indicates whether @s1@ is a proper subset of @s2@.
+-- | @(s1 \`isProperSubsetOf\` s2)@ indicates whether @s1@ is a proper subset of @s2@.
 isProperSubsetOf :: ItemOrder a => ZDD a -> ZDD a -> Bool
 isProperSubsetOf a b = a `isSubsetOf` b && a /= b
 
--- | Check whether two sets are disjoint (i.e., their intersection is empty).
+-- | Check whether two families are disjoint (i.e., their intersection is empty).
 disjoint :: ItemOrder a => ZDD a -> ZDD a -> Bool
 disjoint a b = null (a `intersection` b)
 
@@ -840,6 +840,7 @@ fold' br lf (ZDD node) = Node.fold' br lf node
 
 -- ------------------------------------------------------------------------
 
+-- | Top-down construction of ZDD, memoising internal states using 'Hashable' instance.
 unfoldHashable :: forall a b. (ItemOrder a, Eq b, Hashable b) => (b -> Sig b) -> b -> ZDD a
 unfoldHashable f b = runST $ do
   h <- C.newSized defaultTableSize
@@ -857,6 +858,7 @@ unfoldHashable f b = runST $ do
   let h2 = HashMap.fromList [(x, inSig (fmap (h2 HashMap.!) s)) | (x,s) <- xs]
   return $ h2 HashMap.! b
 
+-- | Top-down construction of ZDD, memoising internal states using 'Ord' instance.
 unfoldOrd :: forall a b. (ItemOrder a, Ord b) => (b -> Sig b) -> b -> ZDD a
 unfoldOrd f b = m2 Map.! b
   where

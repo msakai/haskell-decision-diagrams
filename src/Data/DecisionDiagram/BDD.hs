@@ -607,6 +607,7 @@ mkFold'Op br lf = do
 
 -- ------------------------------------------------------------------------
 
+-- | Top-down construction of BDD, memoising internal states using 'Hashable' instance.
 unfoldHashable :: forall a b. (ItemOrder a, Eq b, Hashable b) => (b -> Sig b) -> b -> BDD a
 unfoldHashable f b = runST $ do
   h <- C.newSized defaultTableSize
@@ -624,6 +625,7 @@ unfoldHashable f b = runST $ do
   let h2 = HashMap.fromList [(x, inSig (fmap (h2 HashMap.!) s)) | (x,s) <- xs]
   return $ h2 HashMap.! b
 
+-- | Top-down construction of BDD, memoising internal states using 'Ord' instance.
 unfoldOrd :: forall a b. (ItemOrder a, Ord b) => (b -> Sig b) -> b -> BDD a
 unfoldOrd f b = m2 Map.! b
   where
@@ -674,7 +676,14 @@ numNodes (BDD node) = Node.numNodes node
 
 -- ------------------------------------------------------------------------
 
--- | Compute \(F_x \) or \(F_{\neg x} \).
+-- | Compute \(F|_{x_i} \) or \(F|_{\neg x_i} \).
+--
+-- \[
+-- F|_{x_i}(\ldots, x_{i-1}, x_{i+1}, \ldots) = F(\ldots, x_{i-1}, \mathrm{True}, x_{i+1}, \ldots)
+-- \]
+-- \[
+-- F|_{\neg x_i}(\ldots, x_{i-1}, x_{i+1}, \ldots) = F(\ldots, x_{i-1}, \mathrm{False}, x_{i+1}, \ldots)
+-- \]
 restrict :: forall a. ItemOrder a => Int -> Bool -> BDD a -> BDD a
 restrict x val bdd = runST $ do
   h <- C.newSized defaultTableSize
@@ -692,7 +701,7 @@ restrict x val bdd = runST $ do
             return ret
   f bdd
 
--- | Compute \(F_{\{x_i = v_i\}_i} \).
+-- | Compute \(F|_{\{x_i = v_i\}_i} \).
 restrictSet :: forall a. ItemOrder a => IntMap Bool -> BDD a -> BDD a
 restrictSet val bdd = runST $ do
   h <- C.newSized defaultTableSize
@@ -743,8 +752,9 @@ restrictLaw law bdd = runST $ do
 
 -- ------------------------------------------------------------------------
 
--- | @subst x N M@ computes substitution \(M_{x = N}\).
+-- | @subst x N M@ computes substitution M[x ↦ N].
 --
+-- Note the order of the arguments.
 -- This operation is also known as /Composition/.
 subst :: forall a. ItemOrder a => Int -> BDD a -> BDD a -> BDD a
 subst x n m = runST $ do
@@ -780,7 +790,9 @@ subst x n m = runST $ do
                 return ret
   f m m n
 
--- | Simultaneous substitution
+-- | Simultaneous substitution.
+--
+-- Note that this is not the same as repeated application of 'subst'.
 substSet :: forall a. ItemOrder a => IntMap (BDD a) -> BDD a -> BDD a
 substSet s m = runST $ do
   supportOp <- mkSupportOp
@@ -847,7 +859,9 @@ substSet s m = runST $ do
 
 -- ------------------------------------------------------------------------
 
--- | Least fixed point
+-- | Least fixed point.
+--
+-- Monotonicity of the operator is assumed but not checked.
 lfp :: ItemOrder a => (BDD a ->  BDD a) -> BDD a
 lfp f = go false
   where
@@ -857,7 +871,9 @@ lfp f = go false
       where
         next = f curr
 
--- | Greatest fixed point
+-- | Greatest fixed point.
+--
+-- Monotonicity of the operator is assumed but not checked.
 gfp :: ItemOrder a => (BDD a ->  BDD a) -> BDD a
 gfp f = go true
   where
