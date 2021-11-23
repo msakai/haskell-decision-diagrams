@@ -35,15 +35,24 @@ module Data.DecisionDiagram.BDD.Internal.Node
 
   -- * (Co)algebraic structure
   , Sig (..)
+
+  -- * Graph
+  , Graph
+  , toGraph
+  , toGraph'
   ) where
 
 import Control.Monad
 import Control.Monad.ST
 import Control.Monad.ST.Unsafe
+import Data.Functor.Identity
 import Data.Hashable
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
 import Data.Interned
+import Data.IntMap.Lazy (IntMap)
+import qualified Data.IntMap.Lazy as IntMap
+import Data.STRef
 import GHC.Generics
 
 -- ------------------------------------------------------------------------
@@ -192,3 +201,47 @@ mkFold'Op br lf = do
 
 -- ------------------------------------------------------------------------
 
+-- | Graph where nodes are decorated using a functor @f@.
+--
+-- The occurrences of the parameter of @f@ represent out-going edges.
+type Graph f = IntMap (f Int)
+
+-- | Convert a node into a pointed graph
+--
+-- Nodes @0@ and @1@ are reserved for @SLeaf False@ and @SLeaf True@ even if
+-- they are not actually used. Therefore the result may be larger than
+-- 'numNodes' if the leaf nodes are not used.
+toGraph :: Node -> (Graph Sig, Int)
+toGraph bdd =
+  case toGraph' (Identity bdd) of
+    (g, Identity v) -> (g, v)
+
+-- | Convert multiple nodes into a graph
+toGraph' :: Traversable t => t Node -> (Graph Sig, t Int)
+toGraph' bs = runST $ do
+  h <- C.newSized defaultTableSize
+  H.insert h (Leaf False) 0
+  H.insert h (Leaf True) 1
+  counter <- newSTRef 2
+  ref <- newSTRef $ IntMap.fromList [(0, SLeaf False), (1, SLeaf True)]
+
+  let f (Leaf False) = return 0
+      f (Leaf True) = return 1
+      f p@(Branch x lo hi) = do
+        m <- H.lookup h p
+        case m of
+          Just ret -> return ret
+          Nothing -> do
+            r0 <- f lo
+            r1 <- f hi
+            n <- readSTRef counter
+            writeSTRef counter $! n+1
+            H.insert h p n
+            modifySTRef' ref (IntMap.insert n (SBranch x r0 r1))
+            return n
+
+  vs <- mapM f bs
+  g <- readSTRef ref
+  return (g, vs)
+
+-- ------------------------------------------------------------------------

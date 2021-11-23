@@ -125,7 +125,6 @@ import Control.Monad.ST.Unsafe
 import Data.Bits (Bits (shiftL))
 import qualified Data.Foldable as Foldable
 import Data.Function (on)
-import Data.Functor.Identity
 import Data.Hashable
 import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.HashTable.Class as H
@@ -139,7 +138,6 @@ import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import Data.Proxy
 import Data.Ratio
-import Data.STRef
 import qualified Data.Vector as V
 import Numeric.Natural
 #if MIN_VERSION_mwc_random(0,15,0)
@@ -152,7 +150,7 @@ import System.Random.MWC.Distributions (bernoulli)
 import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
-import Data.DecisionDiagram.BDD.Internal.Node (Sig (..))
+import Data.DecisionDiagram.BDD.Internal.Node (Sig (..), Graph)
 import qualified Data.DecisionDiagram.BDD.Internal.Node as Node
 
 infixr 3 .&&.
@@ -1050,45 +1048,17 @@ outSig (Branch x lo hi) = SBranch x lo hi
 
 -- ------------------------------------------------------------------------
 
-type Graph f = IntMap (f Int)
-
 -- | Convert a BDD into a pointed graph
 --
 -- Nodes @0@ and @1@ are reserved for @SLeaf False@ and @SLeaf True@
 -- even if they are not actually used. Therefore the result may be
 -- larger than 'numNodes' if the leaf nodes are not used.
 toGraph :: BDD a -> (Graph Sig, Int)
-toGraph bdd =
-  case toGraph' (Identity bdd) of
-    (g, Identity v) -> (g, v)
+toGraph (BDD node) = Node.toGraph node
 
 -- | Convert multiple BDDs into a graph
 toGraph' :: Traversable t => t (BDD a) -> (Graph Sig, t Int)
-toGraph' bs = runST $ do
-  h <- C.newSized defaultTableSize
-  H.insert h F 0
-  H.insert h T 1
-  counter <- newSTRef 2
-  ref <- newSTRef $ IntMap.fromList [(0, SLeaf False), (1, SLeaf True)]
-
-  let f F = return 0
-      f T = return 1
-      f p@(Branch x lo hi) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            r0 <- f lo
-            r1 <- f hi
-            n <- readSTRef counter
-            writeSTRef counter $! n+1
-            H.insert h p n
-            modifySTRef' ref (IntMap.insert n (SBranch x r0 r1))
-            return n
-
-  vs <- mapM f bs
-  g <- readSTRef ref
-  return (g, vs)
+toGraph' bs = Node.toGraph' (fmap (\(BDD node) -> node) bs)
 
 -- | Convert a pointed graph into a BDD
 fromGraph :: (Graph Sig, Int) -> BDD a
