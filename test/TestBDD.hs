@@ -546,6 +546,30 @@ case_fold'_strictness = do
     flag <- readIORef ref
     assertBool "unused value should be evaluated" flag
 
+prop_fold_inSig :: Property
+prop_fold_inSig =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(bdd :: BDD o) ->
+      BDD.fold (BDD.inSig (BDD.SLeaf False)) (BDD.inSig (BDD.SLeaf True)) (\x lo hi -> BDD.inSig (BDD.SBranch x lo hi)) bdd
+      ===
+      bdd
+
+prop_fold'_inSig :: Property
+prop_fold'_inSig =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(bdd :: BDD o) ->
+      BDD.fold' (BDD.inSig (BDD.SLeaf False)) (BDD.inSig (BDD.SLeaf True)) (\x lo hi -> BDD.inSig (BDD.SBranch x lo hi)) bdd
+      ===
+      bdd
+
+-- ------------------------------------------------------------------------
+
+prop_unfoldHashable_outSig :: Property
+prop_unfoldHashable_outSig =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(bdd :: BDD o) ->
+      BDD.unfoldHashable BDD.outSig bdd === bdd
+
 -- ------------------------------------------------------------------------
 
 case_support_false :: Assertion

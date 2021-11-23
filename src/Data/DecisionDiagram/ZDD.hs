@@ -33,7 +33,6 @@ module Data.DecisionDiagram.ZDD
   (
   -- * ZDD type
     ZDD (Empty, Base, Branch)
-  , Sig (..)
 
   -- * Item ordering
   , ItemOrder (..)
@@ -91,6 +90,11 @@ module Data.DecisionDiagram.ZDD
   , mapInsert
   , mapDelete
   , change
+
+  -- * (Co)algebraic structure
+  , Sig (..)
+  , inSig
+  , outSig
 
   -- * Fold
   , fold
@@ -897,11 +901,6 @@ unfoldOrd f b = m2 Map.! b
           let fx = f x
            in g (Map.insert x fx m) (xs ++ Foldable.toList fx)
 
-inSig :: Sig (ZDD a) -> ZDD a
-inSig SEmpty = Empty
-inSig SBase = Base
-inSig (SBranch x lo hi) = Branch x lo hi
-
 -- ------------------------------------------------------------------------
 
 -- | Sample a set from uniform distribution over elements of the ZDD.
@@ -1008,7 +1007,7 @@ findMaxSum weight =
 
 -- ------------------------------------------------------------------------
 
--- | Signature functor of 'ZDD' type as a F-algebra and as a F-coalgebra.
+-- | Signature functor of 'ZDD' type
 data Sig a
   = SEmpty
   | SBase
@@ -1016,6 +1015,18 @@ data Sig a
   deriving (Eq, Ord, Show, Read, Generic, Functor, Foldable, Traversable)
 
 instance Hashable a => Hashable (Sig a)
+
+-- | 'Sig'-algebra stucture of 'ZDD', \(\mathrm{in}_\mathrm{Sig}\).
+inSig :: Sig (ZDD a) -> ZDD a
+inSig SEmpty = Empty
+inSig SBase = Base
+inSig (SBranch x lo hi) = Branch x lo hi
+
+-- | 'Sig'-coalgebra stucture of 'ZDD', \(\mathrm{out}_\mathrm{Sig}\).
+outSig :: ZDD a -> Sig (ZDD a)
+outSig Empty = SEmpty
+outSig Base = SBase
+outSig (Branch x lo hi) = SBranch x lo hi
 
 -- ------------------------------------------------------------------------
 

@@ -687,6 +687,8 @@ prop_findMaxSum =
               .&&.
               conjoin [counterexample (show (s, setWeight s)) $ obj0 >= setWeight s | s <- ZDD.toListOfIntSets a]
 
+-- ------------------------------------------------------------------------
+
 case_fold_laziness :: Assertion
 case_fold_laziness = do
   let bdd :: ZDD ZDD.AscOrder
@@ -709,6 +711,30 @@ case_fold'_strictness = do
   seq (ZDD.fold' False True f bdd) $ do
     flag <- readIORef ref
     assertBool "unused value should be evaluated" flag
+
+prop_fold_inSig :: Property
+prop_fold_inSig =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(zdd :: ZDD o) ->
+      ZDD.fold (ZDD.inSig ZDD.SEmpty) (ZDD.inSig ZDD.SBase) (\x lo hi -> ZDD.inSig (ZDD.SBranch x lo hi)) zdd
+      ===
+      zdd
+
+prop_fold'_inSig :: Property
+prop_fold'_inSig =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(zdd :: ZDD o) ->
+      ZDD.fold' (ZDD.inSig ZDD.SEmpty) (ZDD.inSig ZDD.SBase) (\x lo hi -> ZDD.inSig (ZDD.SBranch x lo hi)) zdd
+      ===
+      zdd
+
+-- ------------------------------------------------------------------------
+
+prop_unfoldHashable_outSig :: Property
+prop_unfoldHashable_outSig =
+  forAllItemOrder $ \(_ :: Proxy o) ->
+    forAll arbitrary $ \(zdd :: ZDD o) ->
+      ZDD.unfoldHashable ZDD.outSig zdd === zdd
 
 -- ------------------------------------------------------------------------
 
