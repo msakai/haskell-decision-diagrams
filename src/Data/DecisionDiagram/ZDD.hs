@@ -445,8 +445,7 @@ subset0 var zdd = runST $ do
 insert :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
 insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
-    f [] Empty = Base
-    f [] Base = Base
+    f [] (Leaf _) = Base
     f [] (Branch top p0 p1) = Branch top (f [] p0) p1
     f (y : ys) Empty = Branch y Empty (f ys Empty)
     f (y : ys) Base = Branch y Base (f ys Empty)
@@ -463,11 +462,9 @@ insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
 delete :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
 delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
   where
-    f [] Empty = Empty
-    f [] Base = Empty
+    f [] (Leaf _) = Empty
     f [] (Branch top p0 p1) = Branch top (f [] p0) p1
-    f (_ : _) Empty = Empty
-    f (_ : _) Base = Base
+    f (_ : _) l@(Leaf _) = l
     f yys@(y : ys) p@(Branch top p0 p1) =
       case compareItem (Proxy :: Proxy a) y top of
         LT -> p
@@ -505,8 +502,7 @@ mapDelete :: forall a. ItemOrder a => Int -> ZDD a -> ZDD a
 mapDelete var zdd = runST $ do
   unionOp <- mkUnionOp
   h <- C.newSized defaultTableSize
-  let f Base = return Base
-      f Empty = return Empty
+  let f l@(Leaf _) = return l
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
@@ -721,8 +717,7 @@ minimal :: forall a. ItemOrder a => BDD.BDD a -> ZDD a
 minimal bdd = runST $ do
   diffOp <- mkDifferenceOp
   h <- C.newSized defaultTableSize
-  let f (BDD.Leaf False) = return Empty
-      f (BDD.Leaf True) = return Base
+  let f (BDD.Leaf b) = return (Leaf b)
       f p@(BDD.Branch x lo hi) = do
         m <- H.lookup h p
         case m of
