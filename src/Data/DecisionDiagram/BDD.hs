@@ -174,10 +174,10 @@ newtype BDD a = BDD Node.Node
   deriving (Eq, Hashable)
 
 pattern F :: BDD a
-pattern F = BDD Node.F
+pattern F = Leaf False
 
 pattern T :: BDD a
-pattern T = BDD Node.T
+pattern T = Leaf True
 
 pattern Leaf :: Bool -> BDD a
 pattern Leaf b = BDD (Node.Leaf b)

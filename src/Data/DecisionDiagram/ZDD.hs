@@ -194,11 +194,11 @@ newtype ZDD a = ZDD Node.Node
 
 -- | Synonym of @'Leaf' False@
 pattern Empty :: ZDD a
-pattern Empty = ZDD Node.F
+pattern Empty = Leaf False
 
 -- | Synonym of @'Leaf' True@
 pattern Base :: ZDD a
-pattern Base = ZDD Node.T
+pattern Base = Leaf True
 
 pattern Leaf :: Bool -> ZDD a
 pattern Leaf b = ZDD (Node.Leaf b)

@@ -22,7 +22,7 @@
 module Data.DecisionDiagram.BDD.Internal.Node
   (
   -- * Low level node type
-    Node (T, F, Leaf, Branch)
+    Node (Leaf, Branch)
   , nodeId
 
   , numNodes
