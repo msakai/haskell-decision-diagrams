@@ -532,7 +532,7 @@ case_fold_laziness = do
           error "unused value should not be evaluated"
         else
           lo
-  seq (BDD.fold f const bdd) $ return ()
+  seq (BDD.fold f id bdd) $ return ()
 
 case_fold'_strictness :: Assertion
 case_fold'_strictness = do
@@ -542,7 +542,7 @@ case_fold'_strictness = do
       f x lo _hi = unsafePerformIO $ do
         when (x==2) $ writeIORef ref True
         return lo
-  seq (BDD.fold' f const bdd) $ do
+  seq (BDD.fold' f id bdd) $ do
     flag <- readIORef ref
     assertBool "unused value should be evaluated" flag
 

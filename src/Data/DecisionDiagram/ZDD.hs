@@ -713,7 +713,7 @@ minimalHittingSetsToda :: forall a. ItemOrder a => ZDD a -> ZDD a
 minimalHittingSetsToda = minimal . hittingSetsBDD
 
 hittingSetsBDD :: forall a. ItemOrder a => ZDD a -> BDD.BDD a
-hittingSetsBDD = fold' BDD.true BDD.false (\top h0 h1 -> h0 BDD..&&. BDD.Branch top h1 BDD.true)
+hittingSetsBDD = fold' (\top h0 h1 -> h0 BDD..&&. BDD.Branch top h1 BDD.true) (\b -> BDD.Leaf (not b))
 
 minimal :: forall a. ItemOrder a => BDD.BDD a -> ZDD a
 minimal bdd = runST $ do
@@ -778,7 +778,7 @@ null = (empty ==)
 -- 9223372036854775807
 --
 size :: (Integral b) => ZDD a -> b
-size = fold' 0 1 (\_ n0 n1 -> n0 + n1)
+size = fold' (\_ n0 n1 -> n0 + n1) (\b -> if b then 1 else 0)
 
 -- | @(s1 `isSubsetOf` s2)@ indicates whether @s1@ is a subset of @s2@.
 isSubsetOf :: ItemOrder a => ZDD a -> ZDD a -> Bool
@@ -805,7 +805,7 @@ numNodes (ZDD node) = Node.numNodes node
 -- >>> flatten (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [3,4]]) :: ZDD AscOrder)
 -- fromList [1,2,3,4]
 flatten :: ItemOrder a => ZDD a -> IntSet
-flatten = fold' IntSet.empty IntSet.empty (\top lo hi -> IntSet.insert top (lo `IntSet.union` hi))
+flatten = fold' (\top lo hi -> IntSet.insert top (lo `IntSet.union` hi)) (const IntSet.empty)
 
 -- | Create a ZDD from a set of 'IntSet'
 fromSetOfIntSets :: forall a. ItemOrder a => Set IntSet -> ZDD a
@@ -813,7 +813,7 @@ fromSetOfIntSets = fromListOfIntSets . Set.toList
 
 -- | Convert the family to a set of 'IntSet'.
 toSetOfIntSets :: ZDD a -> Set IntSet
-toSetOfIntSets = fold' Set.empty (Set.singleton IntSet.empty) (\top lo hi -> lo <> Set.map (IntSet.insert top) hi)
+toSetOfIntSets = fold' (\top lo hi -> lo <> Set.map (IntSet.insert top) hi) (\b -> if b then Set.singleton IntSet.empty else Set.empty)
 
 -- | Create a ZDD from a list of 'IntSet'
 fromListOfIntSets :: forall a. ItemOrder a => [IntSet] -> ZDD a
@@ -824,7 +824,7 @@ fromListOfIntSets = fromListOfSortedList . map f
 
 -- | Convert the family to a list of 'IntSet'.
 toListOfIntSets :: ZDD a -> [IntSet]
-toListOfIntSets = g . fold' (False,[]) (True,[]) f
+toListOfIntSets = g . fold' f (\b -> (b,[]))
   where
     f top (b, xss) hi = (b, map (IntSet.insert top) (g hi) <> xss)
     g (True, xss) = IntSet.empty : xss
@@ -838,15 +838,13 @@ fromListOfSortedList = unions . map f
 
 -- | Fold over the graph structure of the ZDD.
 --
--- It takes values for substituting 'empty' and 'base',
--- and a function for substiting non-terminal node.
+-- It takes two functions that substitute 'Branch'  and 'Leaf' respectively.
 --
 -- Note that its type is isomorphic to @('Sig' b -> b) -> ZDD a -> b@.
-fold :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
-fold ff tt br zdd = runST $ do
+fold :: (Int -> b -> b -> b) -> (Bool -> b) -> ZDD a -> b
+fold br lf zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f Empty = return ff
-      f Base = return tt
+  let f (Leaf b) = return (lf b)
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
@@ -860,11 +858,10 @@ fold ff tt br zdd = runST $ do
   f zdd
 
 -- | Strict version of 'fold'
-fold' :: b -> b -> (Int -> b -> b -> b) -> ZDD a -> b
-fold' !ff !tt br zdd = runST $ do
+fold' :: (Int -> b -> b -> b) -> (Bool -> b) -> ZDD a -> b
+fold' br lf zdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f Empty = return ff
-      f Base = return tt
+  let f (Leaf b) = return $! lf b
       f p@(Branch top p0 p1) = do
         m <- H.lookup h p
         case m of
@@ -984,7 +981,7 @@ uniformM zdd = func
 findMinSum :: forall a w. (ItemOrder a, Num w, Ord w) => (Int -> w) -> ZDD a -> (w, IntSet)
 findMinSum weight =
   fromMaybe (error "Data.DecisionDiagram.ZDD.findMinSum: empty ZDD") .
-    fold' Nothing (Just (0, IntSet.empty)) f
+    fold' f (\b -> if b then Just (0, IntSet.empty) else Nothing)
   where
     f _ _ Nothing = undefined
     f x z1 (Just (w2, s2)) =
@@ -1006,7 +1003,7 @@ findMinSum weight =
 findMaxSum :: forall a w. (ItemOrder a, Num w, Ord w) => (Int -> w) -> ZDD a -> (w, IntSet)
 findMaxSum weight =
   fromMaybe (error "Data.DecisionDiagram.ZDD.findMinSum: empty ZDD") .
-    fold' Nothing (Just (0, IntSet.empty)) f
+    fold' f (\b -> if b then Just (0, IntSet.empty) else Nothing)
   where
     f _ _ Nothing = undefined
     f x z1 (Just (w2, s2)) =
