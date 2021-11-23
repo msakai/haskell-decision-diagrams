@@ -32,7 +32,6 @@ module Data.DecisionDiagram.BDD
   (
   -- * The BDD type
     BDD (Leaf, Branch)
-  , Sig (..)
 
   -- * Item ordering
   , ItemOrder (..)
@@ -92,6 +91,11 @@ module Data.DecisionDiagram.BDD
   , allSatComplete
   , countSat
   , uniformSatM
+
+  -- * (Co)algebraic structure
+  , Sig (..)
+  , inSig
+  , outSig
 
   -- * Fold
   , fold
@@ -675,10 +679,6 @@ unfoldOrd f b = m2 Map.! b
           let fx = f x
            in g (Map.insert x fx m) (xs ++ Foldable.toList fx)
 
-inSig :: Sig (BDD a) -> BDD a
-inSig (SLeaf b) = Leaf b
-inSig (SBranch x lo hi) = Branch x lo hi
-
 -- ------------------------------------------------------------------------
 
 -- | All the variables that this BDD depends on.
@@ -1054,13 +1054,23 @@ uniformSatM xs0 bdd0 = func IntMap.empty
 
 -- ------------------------------------------------------------------------
 
--- | Signature functor of 'BDD' type as a F-algebra and as a F-coalgebra.
+-- | Signature functor of 'BDD' type
 data Sig a
   = SLeaf !Bool
   | SBranch !Int a a
   deriving (Eq, Ord, Show, Read, Generic, Functor, Foldable, Traversable)
 
 instance Hashable a => Hashable (Sig a)
+
+-- | 'Sig'-algebra stucture of 'BDD', \(\mathrm{in}_\mathrm{Sig}\).
+inSig :: Sig (BDD a) -> BDD a
+inSig (SLeaf b) = Leaf b
+inSig (SBranch x lo hi) = Branch x lo hi
+
+-- | 'Sig'-coalgebra stucture of 'BDD', \(\mathrm{out}_\mathrm{Sig}\).
+outSig :: BDD a -> Sig (BDD a)
+outSig (Leaf b) = SLeaf b
+outSig (Branch x lo hi) = SBranch x lo hi
 
 -- ------------------------------------------------------------------------
 
