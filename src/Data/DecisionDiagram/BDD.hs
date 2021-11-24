@@ -1062,21 +1062,10 @@ toGraph' bs = Node.toGraph' (fmap (\(BDD node) -> node) bs)
 
 -- | Convert a pointed graph into a BDD
 fromGraph :: (Graph Sig, Int) -> BDD a
-fromGraph (g, v) =
-  case IntMap.lookup v (fromGraph' g) of
-    Nothing -> error ("Data.DecisionDiagram.BDD.fromGraph: invalid node id " ++ show v)
-    Just bdd -> bdd
+fromGraph = Node.foldGraph inSig
 
 -- | Convert nodes of a graph into BDDs
 fromGraph' :: Graph Sig -> IntMap (BDD a)
-fromGraph' g = ret
-  where
-    ret = IntMap.map f g
-    f (SLeaf b) = Leaf b
-    f (SBranch x lo hi) =
-      case (IntMap.lookup lo ret, IntMap.lookup hi ret) of
-        (Nothing, _) -> error ("Data.DecisionDiagram.BDD.fromGraph': invalid node id " ++ show lo)
-        (_, Nothing) -> error ("Data.DecisionDiagram.BDD.fromGraph': invalid node id " ++ show hi)
-        (Just lo', Just hi') -> Branch x lo' hi'
+fromGraph' = Node.foldGraphNodes inSig
 
 -- ------------------------------------------------------------------------

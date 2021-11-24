@@ -40,6 +40,8 @@ module Data.DecisionDiagram.BDD.Internal.Node
   , Graph
   , toGraph
   , toGraph'
+  , foldGraph
+  , foldGraphNodes
   ) where
 
 import Control.Monad
@@ -243,5 +245,22 @@ toGraph' bs = runST $ do
   vs <- mapM f bs
   g <- readSTRef ref
   return (g, vs)
+
+-- | Fold over pointed graph
+foldGraph :: Functor f => (f a -> a) -> (Graph f, Int) -> a
+foldGraph f (g, v) =
+  case IntMap.lookup v (foldGraphNodes f g) of
+    Just x -> x
+    Nothing -> error ("foldGraphNodes: invalid node id " ++ show v)
+
+-- | Fold over graph nodes
+foldGraphNodes :: Functor f => (f a -> a) -> Graph f -> IntMap a
+foldGraphNodes f m = ret
+  where
+    ret = IntMap.map (f . fmap h) m
+    h v =
+      case IntMap.lookup v ret of
+        Just x -> x
+        Nothing -> error ("foldGraphNodes: invalid node id " ++ show v)
 
 -- ------------------------------------------------------------------------

@@ -1014,21 +1014,10 @@ toGraph' bs = Node.toGraph' (fmap (\(ZDD node) -> node) bs)
 
 -- | Convert a pointed graph into a ZDD
 fromGraph :: (Graph Sig, Int) -> ZDD a
-fromGraph (g, v) =
-  case IntMap.lookup v (fromGraph' g) of
-    Nothing -> error ("Data.DecisionDiagram.ZDD.fromGraph: invalid node id " ++ show v)
-    Just bdd -> bdd
+fromGraph = Node.foldGraph inSig
 
 -- | Convert nodes of a graph into ZDDs
 fromGraph' :: Graph Sig -> IntMap (ZDD a)
-fromGraph' g = ret
-  where
-    ret = IntMap.map f g
-    f (SLeaf b) = Leaf b
-    f (SBranch x lo hi) =
-      case (IntMap.lookup lo ret, IntMap.lookup hi ret) of
-        (Nothing, _) -> error ("Data.DecisionDiagram.ZDD.fromGraph': invalid node id " ++ show lo)
-        (_, Nothing) -> error ("Data.DecisionDiagram.ZDD.fromGraph': invalid node id " ++ show hi)
-        (Just lo', Just hi') -> Branch x lo' hi'
+fromGraph' = Node.foldGraphNodes inSig
 
 -- ------------------------------------------------------------------------
