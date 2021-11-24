@@ -22,5 +22,8 @@ Hash-consing is implemented using [intern](https://hackage.haskell.org/package/i
 |[obdd](https://hackage.haskell.org/package/obdd)|[GitHub](https://github.com/jwaldmann/haskell-obdd)|✔️|-|pure|pure Haskell|-|
 |[HasCacBDD](https://hackage.haskell.org/package/HasCacBDD)|[GitHub](https://github.com/m4lvin/HasCacBDD)|✔️|-|pure|FFI|✔️|
 |[hBDD](https://hackage.haskell.org/package/hBDD) ([hBDD-CUDD](https://hackage.haskell.org/package/hBDD-CUDD), [hBDD-CMUBDD](https://hackage.haskell.org/package/hBDD-CMUBDD))|[GitHub](https://github.com/peteg/hBDD)|✔️|-|pure|FFI|✔️|
+|[cudd](https://hackage.haskell.org/package/cudd)|[GitHub](https://github.com/adamwalker/haskell_cudd)|✔️|-|both pure\*1 and monadic|FFI|✔️|
+
+\*1: `cudd`'s pure interface is different from normal Haskell data types (like ones in the [containers](https://hackage.haskell.org/package/containers) package, for example) because it requires `DDManager` argument.
 
 Please feel free to make a pull request for addition or correction.
