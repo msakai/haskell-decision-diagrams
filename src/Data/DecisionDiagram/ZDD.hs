@@ -162,6 +162,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Vector as V
 import qualified GHC.Exts as Exts
+import GHC.Stack
 import Numeric.Natural
 #if MIN_VERSION_mwc_random(0,15,0)
 import System.Random.Stateful (StatefulGen (..))
@@ -288,7 +289,7 @@ subsets = foldl' f Base . sortBy (flip (compareItem (Proxy :: Proxy a))) . IntSe
     f zdd x = Branch x zdd zdd
 
 -- | Set of all k-combination of a set
-combinations :: forall a. ItemOrder a => IntSet -> Int -> ZDD a
+combinations :: forall a. (ItemOrder a, HasCallStack) => IntSet -> Int -> ZDD a
 combinations xs k
   | k < 0 = error "Data.DecisionDiagram.ZDD.combinations: negative size"
   | otherwise = unfoldOrd f (0, k)
@@ -896,9 +897,9 @@ unfoldOrd f b = m2 Map.! b
 -- @
 -- .
 #if MIN_VERSION_mwc_random(0,15,0)
-uniformM :: forall a g m. (ItemOrder a, StatefulGen g m) => ZDD a -> g -> m IntSet
+uniformM :: forall a g m. (ItemOrder a, StatefulGen g m, HasCallStack) => ZDD a -> g -> m IntSet
 #else
-uniformM :: forall a m. (ItemOrder a, PrimMonad m) => ZDD a -> Gen (PrimState m) -> m IntSet
+uniformM :: forall a m. (ItemOrder a, PrimMonad m, HasCallStack) => ZDD a -> Gen (PrimState m) -> m IntSet
 #endif
 uniformM Empty = error "Data.DecisionDiagram.ZDD.uniformM: empty ZDD"
 uniformM zdd = func
@@ -942,7 +943,7 @@ uniformM zdd = func
 -- \[
 -- \min_{X\in S} \sum_{x\in X} w(x)
 -- \]
-findMinSum :: forall a w. (ItemOrder a, Num w, Ord w) => (Int -> w) -> ZDD a -> (w, IntSet)
+findMinSum :: forall a w. (ItemOrder a, Num w, Ord w, HasCallStack) => (Int -> w) -> ZDD a -> (w, IntSet)
 findMinSum weight =
   fromMaybe (error "Data.DecisionDiagram.ZDD.findMinSum: empty ZDD") .
     fold' f (\b -> if b then Just (0, IntSet.empty) else Nothing)
@@ -964,7 +965,7 @@ findMinSum weight =
 --
 -- >>> findMaxSum (IntMap.fromList [(1,2),(2,4),(3,-3)] IntMap.!) (fromListOfIntSets (map IntSet.fromList [[1], [2], [3], [1,2,3]]) :: ZDD AscOrder)
 -- (4,fromList [2])
-findMaxSum :: forall a w. (ItemOrder a, Num w, Ord w) => (Int -> w) -> ZDD a -> (w, IntSet)
+findMaxSum :: forall a w. (ItemOrder a, Num w, Ord w, HasCallStack) => (Int -> w) -> ZDD a -> (w, IntSet)
 findMaxSum weight =
   fromMaybe (error "Data.DecisionDiagram.ZDD.findMinSum: empty ZDD") .
     fold' f (\b -> if b then Just (0, IntSet.empty) else Nothing)
@@ -1013,11 +1014,11 @@ toGraph' :: Traversable t => t (ZDD a) -> (Graph Sig, t Int)
 toGraph' bs = Node.toGraph' (fmap (\(ZDD node) -> node) bs)
 
 -- | Convert a pointed graph into a ZDD
-fromGraph :: (Graph Sig, Int) -> ZDD a
+fromGraph :: HasCallStack => (Graph Sig, Int) -> ZDD a
 fromGraph = Node.foldGraph inSig
 
 -- | Convert nodes of a graph into ZDDs
-fromGraph' :: Graph Sig -> IntMap (ZDD a)
+fromGraph' :: HasCallStack => Graph Sig -> IntMap (ZDD a)
 fromGraph' = Node.foldGraphNodes inSig
 
 -- ------------------------------------------------------------------------
