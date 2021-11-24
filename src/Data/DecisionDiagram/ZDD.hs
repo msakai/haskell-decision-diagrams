@@ -143,7 +143,6 @@ import Control.Monad.Primitive
 import Control.Monad.ST
 import qualified Data.Foldable as Foldable
 import Data.Function (on)
-import Data.Functor.Identity
 import Data.Hashable
 import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as HashMap
@@ -161,7 +160,6 @@ import Data.Proxy
 import Data.Ratio
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.STRef
 import qualified Data.Vector as V
 import qualified GHC.Exts as Exts
 import Numeric.Natural
@@ -174,7 +172,7 @@ import System.Random.MWC.Distributions (bernoulli)
 import Text.Read
 
 import Data.DecisionDiagram.BDD.Internal.ItemOrder
-import Data.DecisionDiagram.BDD.Internal.Node (Sig (..))
+import Data.DecisionDiagram.BDD.Internal.Node (Sig (..), Graph)
 import qualified Data.DecisionDiagram.BDD.Internal.Node as Node
 import qualified Data.DecisionDiagram.BDD as BDD
 
@@ -1002,63 +1000,24 @@ outSig (Branch x lo hi) = SBranch x lo hi
 
 -- ------------------------------------------------------------------------
 
-type Graph f = IntMap (f Int)
-
 -- | Convert a ZDD into a pointed graph
 --
 -- Nodes @0@ and @1@ are reserved for @SLeaf False@ and @SLeaf True@ even if
 -- they are not actually used. Therefore the result may be larger than
 -- 'numNodes' if the leaf nodes are not used.
 toGraph :: ZDD a -> (Graph Sig, Int)
-toGraph bdd =
-  case toGraph' (Identity bdd) of
-    (g, Identity v) -> (g, v)
+toGraph (ZDD node) = Node.toGraph node
 
 -- | Convert multiple ZDDs into a graph
 toGraph' :: Traversable t => t (ZDD a) -> (Graph Sig, t Int)
-toGraph' bs = runST $ do
-  h <- C.newSized defaultTableSize
-  H.insert h Empty 0
-  H.insert h Base 1
-  counter <- newSTRef 2
-  ref <- newSTRef $ IntMap.fromList [(0, SLeaf False), (1, SLeaf True)]
-
-  let f Empty = return 0
-      f Base = return 1
-      f p@(Branch x lo hi) = do
-        m <- H.lookup h p
-        case m of
-          Just ret -> return ret
-          Nothing -> do
-            r0 <- f lo
-            r1 <- f hi
-            n <- readSTRef counter
-            writeSTRef counter $! n+1
-            H.insert h p n
-            modifySTRef' ref (IntMap.insert n (SBranch x r0 r1))
-            return n
-
-  vs <- mapM f bs
-  g <- readSTRef ref
-  return (g, vs)
+toGraph' bs = Node.toGraph' (fmap (\(ZDD node) -> node) bs)
 
 -- | Convert a pointed graph into a ZDD
 fromGraph :: (Graph Sig, Int) -> ZDD a
-fromGraph (g, v) =
-  case IntMap.lookup v (fromGraph' g) of
-    Nothing -> error ("Data.DecisionDiagram.ZDD.fromGraph: invalid node id " ++ show v)
-    Just bdd -> bdd
+fromGraph = Node.foldGraph inSig
 
 -- | Convert nodes of a graph into ZDDs
 fromGraph' :: Graph Sig -> IntMap (ZDD a)
-fromGraph' g = ret
-  where
-    ret = IntMap.map f g
-    f (SLeaf b) = Leaf b
-    f (SBranch x lo hi) =
-      case (IntMap.lookup lo ret, IntMap.lookup hi ret) of
-        (Nothing, _) -> error ("Data.DecisionDiagram.ZDD.fromGraph': invalid node id " ++ show lo)
-        (_, Nothing) -> error ("Data.DecisionDiagram.ZDD.fromGraph': invalid node id " ++ show hi)
-        (Just lo', Just hi') -> Branch x lo' hi'
+fromGraph' = Node.foldGraphNodes inSig
 
 -- ------------------------------------------------------------------------
