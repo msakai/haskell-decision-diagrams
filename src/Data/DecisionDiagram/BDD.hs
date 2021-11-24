@@ -139,6 +139,7 @@ import qualified Data.Map.Lazy as Map
 import Data.Proxy
 import Data.Ratio
 import qualified Data.Vector as V
+import GHC.Stack
 import Numeric.Natural
 #if MIN_VERSION_mwc_random(0,15,0)
 import System.Random.MWC (Uniform (..))
@@ -897,7 +898,7 @@ anySat = findSatM
 allSat :: BDD a -> [IntMap Bool]
 allSat = findSatM
 
-findSatCompleteM :: forall a m. (MonadPlus m, ItemOrder a) => IntSet -> BDD a -> m (IntMap Bool)
+findSatCompleteM :: forall a m. (MonadPlus m, ItemOrder a, HasCallStack) => IntSet -> BDD a -> m (IntMap Bool)
 findSatCompleteM xs0 bdd = runST $ do
   h <- C.newSized defaultTableSize
   let f _ (Leaf False) = return $ mzero
@@ -947,7 +948,7 @@ allSatComplete = findSatCompleteM
 -- >>> import Data.Int
 -- >>> maxBound :: Int64
 -- 9223372036854775807
-countSat :: forall a b. (ItemOrder a, Num b, Bits b) => IntSet -> BDD a -> b
+countSat :: forall a b. (ItemOrder a, Num b, Bits b, HasCallStack) => IntSet -> BDD a -> b
 countSat xs bdd = runST $ do
   h <- C.newSized defaultTableSize
   let f _ (Leaf False) = return $ 0
@@ -986,9 +987,9 @@ countSat xs bdd = runST $ do
 -- @
 -- .
 #if MIN_VERSION_mwc_random(0,15,0)
-uniformSatM :: forall a g m. (ItemOrder a, StatefulGen g m) => IntSet -> BDD a -> g -> m (IntMap Bool)
+uniformSatM :: forall a g m. (ItemOrder a, StatefulGen g m, HasCallStack) => IntSet -> BDD a -> g -> m (IntMap Bool)
 #else
-uniformSatM :: forall a m. (ItemOrder a, PrimMonad m) => IntSet -> BDD a -> Gen (PrimState m) -> m (IntMap Bool)
+uniformSatM :: forall a m. (ItemOrder a, PrimMonad m, HasCallStack) => IntSet -> BDD a -> Gen (PrimState m) -> m (IntMap Bool)
 #endif
 uniformSatM xs0 bdd0 = func IntMap.empty
   where
@@ -1061,11 +1062,11 @@ toGraph' :: Traversable t => t (BDD a) -> (Graph Sig, t Int)
 toGraph' bs = Node.toGraph' (fmap (\(BDD node) -> node) bs)
 
 -- | Convert a pointed graph into a BDD
-fromGraph :: (Graph Sig, Int) -> BDD a
+fromGraph :: HasCallStack => (Graph Sig, Int) -> BDD a
 fromGraph = Node.foldGraph inSig
 
 -- | Convert nodes of a graph into BDDs
-fromGraph' :: Graph Sig -> IntMap (BDD a)
+fromGraph' :: HasCallStack => Graph Sig -> IntMap (BDD a)
 fromGraph' = Node.foldGraphNodes inSig
 
 -- ------------------------------------------------------------------------

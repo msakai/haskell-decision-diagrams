@@ -56,6 +56,7 @@ import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as IntMap
 import Data.STRef
 import GHC.Generics
+import GHC.Stack
 
 -- ------------------------------------------------------------------------
 
@@ -247,14 +248,14 @@ toGraph' bs = runST $ do
   return (g, vs)
 
 -- | Fold over pointed graph
-foldGraph :: Functor f => (f a -> a) -> (Graph f, Int) -> a
+foldGraph :: (Functor f, HasCallStack) => (f a -> a) -> (Graph f, Int) -> a
 foldGraph f (g, v) =
   case IntMap.lookup v (foldGraphNodes f g) of
     Just x -> x
     Nothing -> error ("foldGraphNodes: invalid node id " ++ show v)
 
 -- | Fold over graph nodes
-foldGraphNodes :: Functor f => (f a -> a) -> Graph f -> IntMap a
+foldGraphNodes :: (Functor f, HasCallStack) => (f a -> a) -> Graph f -> IntMap a
 foldGraphNodes f m = ret
   where
     ret = IntMap.map (f . fmap h) m
