@@ -9,11 +9,13 @@ Dev:
 [![Build Status](https://github.com/msakai/haskell-decision-diagrams/actions/workflows/build.yaml/badge.svg)](https://github.com/msakai/haskell-decision-diagrams/actions/workflows/build.yaml)
 [![Coverage Status](https://coveralls.io/repos/msakai/haskell-decision-diagrams/badge.svg)](https://coveralls.io/r/msakai/haskell-decision-diagrams)
 
-Binary Decision Diagrams (BDD) and Zero-suppressed Binary Decision Diagrams (ZDD) implementation in Haskell.
+[Binary Decision Diagrams (BDD)](https://en.wikipedia.org/wiki/Binary_decision_diagram) and [Zero-suppressed Binary Decision Diagrams (ZDD)](https://en.wikipedia.org/wiki/Zero-suppressed_decision_diagram) implementation in Haskell.
 
-Hash-consing is implemented using [intern](https://hackage.haskell.org/package/intern) package.
+BDD is a data stucture suitable for representing boolean functions (can be thought as a compressed representation of truth tables) and many operations on boolean functions can be performed efficiently.  ZDD is a variant of BDD suitable for representing (sparse) families of sets compactly.
 
-## Comparison with other BDD packages
+BDD/ZDD uses hash-consing for compact representation and efficient comparison, and we use [intern](https://hackage.haskell.org/package/intern) package for implementing hash-consing.
+
+## Comparison with other BDD packages for Haskell
 
 |Package name|Repository|BDD|ZDD|Style|Implementation|Hash-consing / Fast equality test|
 |------------|----------|---|---|-----|--------------|---------------------------------|
@@ -26,4 +28,4 @@ Hash-consing is implemented using [intern](https://hackage.haskell.org/package/i
 
 \*1: `cudd`'s pure interface is different from normal Haskell data types (like ones in the [containers](https://hackage.haskell.org/package/containers) package, for example) because it requires `DDManager` argument.
 
-Please feel free to make a pull request for addition or correction.
+Please feel free to make a pull request for addition or correction to the comparision.
