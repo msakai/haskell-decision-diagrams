@@ -1,5 +1,7 @@
 # Changelog for `decision-diagrams` package
 
+## 0.3.0.0 (unreleased)
+
 ## 0.2.0.0
 
 ### Changes
