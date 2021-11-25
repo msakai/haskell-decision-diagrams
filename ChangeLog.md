@@ -16,6 +16,8 @@
 
 * Change signature of `fold` and `fold'` of ZDD (ditto)
 
+* Add `HasCallStack` to some functions that are expected to raise excpetions
+
 ### Additions
 
 * Introduce signature functor type (`Sig`)
