@@ -17,14 +17,14 @@ BDD/ZDD uses hash-consing for compact representation and efficient comparison, a
 
 ## Comparison with other BDD packages for Haskell
 
-|Package name|Repository|BDD|ZDD|Style|Implementation|Hash-consing / Fast equality test|
-|------------|----------|---|---|-----|--------------|---------------------------------|
-|[decision-diagrams](https://hackage.haskell.org/package/decision-diagrams) (this package)|[GitHub](https://github.com/msakai/haskell-decision-diagrams/)|✔️|✔️|pure|pure Haskell|✔️|
-|[zsdd](https://hackage.haskell.org/package/zsdd)|[GitHub](https://github.com/eddiejones2108/decision-diagrams) (deleted?)|✔️|✔️|monadic|pure Haskell|✔️|
-|[obdd](https://hackage.haskell.org/package/obdd)|[GitHub](https://github.com/jwaldmann/haskell-obdd)|✔️|-|pure|pure Haskell|-|
-|[HasCacBDD](https://hackage.haskell.org/package/HasCacBDD)|[GitHub](https://github.com/m4lvin/HasCacBDD)|✔️|-|pure|FFI|✔️|
-|[hBDD](https://hackage.haskell.org/package/hBDD) ([hBDD-CUDD](https://hackage.haskell.org/package/hBDD-CUDD), [hBDD-CMUBDD](https://hackage.haskell.org/package/hBDD-CMUBDD))|[GitHub](https://github.com/peteg/hBDD)|✔️|-|pure|FFI|✔️|
-|[cudd](https://hackage.haskell.org/package/cudd)|[GitHub](https://github.com/adamwalker/haskell_cudd)|✔️|-|both pure\*1 and monadic|FFI|✔️|
+|Package name|Repository|BDD|ZDD|Style|Implementation|Hash-consing / Fast equality test|Dynamic variable reordering|
+|------------|----------|---|---|-----|--------------|---------------------------------|---------------------------|
+|[decision-diagrams](https://hackage.haskell.org/package/decision-diagrams) (this package)|[GitHub](https://github.com/msakai/haskell-decision-diagrams/)|✔️|✔️|pure|pure Haskell|✔️|-|
+|[zsdd](https://hackage.haskell.org/package/zsdd)|[GitHub](https://github.com/eddiejones2108/decision-diagrams) (deleted?)|✔️|✔️|monadic|pure Haskell|✔️|-|
+|[obdd](https://hackage.haskell.org/package/obdd)|[GitHub](https://github.com/jwaldmann/haskell-obdd)|✔️|-|pure|pure Haskell|-|-|
+|[HasCacBDD](https://hackage.haskell.org/package/HasCacBDD)|[GitHub](https://github.com/m4lvin/HasCacBDD)|✔️|-|pure|FFI|✔️|-|
+|[hBDD](https://hackage.haskell.org/package/hBDD) ([hBDD-CUDD](https://hackage.haskell.org/package/hBDD-CUDD), [hBDD-CMUBDD](https://hackage.haskell.org/package/hBDD-CMUBDD))|[GitHub](https://github.com/peteg/hBDD)|✔️|-|pure|FFI|✔️|✔️|
+|[cudd](https://hackage.haskell.org/package/cudd)|[GitHub](https://github.com/adamwalker/haskell_cudd)|✔️|-|both pure\*1 and monadic|FFI|✔️|✔️|
 
 \*1: `cudd`'s pure interface is different from normal Haskell data types (like ones in the [containers](https://hackage.haskell.org/package/containers) package, for example) because it requires `DDManager` argument.
 
