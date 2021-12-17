@@ -12,7 +12,7 @@ extra-source-files:
 
 # Metadata used when publishing your package
 synopsis:            Binary Decision Diagrams (BDD) and Zero-suppressed Binary Decision Diagrams (ZDD)
-category:            Data, Data Structures, Logic
+category:            Data, Data Structures, Logic, Formal Methods
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
