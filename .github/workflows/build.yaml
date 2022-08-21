@@ -7,7 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.4.4', '8.6.5', '8.8.4', '8.10.7', '9.0.1']
+        ghc: ['8.4.4', '8.6.5', '8.8.4', '8.10.7', '9.0.2', '9.2.4']
         os: [ubuntu-latest]
         include:
           - ghc: '8.4.4'
@@ -20,11 +20,14 @@ jobs:
             resolver: 'lts-16.31'
             flags: ''
           - ghc: '8.10.7'
-            resolver: 'lts-18.12'
+            resolver: 'lts-18.28'
             coveralls: true
             flags: '--coverage'
-          - ghc: '9.0.1'
-            resolver: 'nightly-2021-10-13'
+          - ghc: '9.0.2'
+            resolver: 'lts-19.18'
+            flags: ''
+          - ghc: '9.2.4'
+            resolver: 'nightly-2022-08-19'
             flags: ''
     steps:
       - uses: actions/checkout@v2

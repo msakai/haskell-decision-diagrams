@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -32,12 +33,13 @@ module Data.DecisionDiagram.BDD.Internal.ItemOrder
   , Level (..)
   ) where
 
+import Data.Kind (Type)
 import Data.Proxy
 import Data.Reflection
 
 -- ------------------------------------------------------------------------
 
-class ItemOrder a where
+class ItemOrder (a :: Type) where
   compareItem :: proxy a -> Int -> Int -> Ordering
 
 data AscOrder
