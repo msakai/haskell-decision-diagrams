@@ -40,7 +40,7 @@ import Utils
 
 instance ZDD.ItemOrder a => Arbitrary (ZDD a) where
   arbitrary = do
-    vars <- liftM (sortBy (ZDD.compareItem (Proxy :: Proxy a)) . IntSet.toList) arbitrary
+    vars <- fmap (sortBy (ZDD.compareItem (Proxy :: Proxy a)) . IntSet.toList) arbitrary
     let f vs n = oneof $
           [ return ZDD.empty
           , return ZDD.base
@@ -55,8 +55,8 @@ instance ZDD.ItemOrder a => Arbitrary (ZDD a) where
           ]
     sized (f vars)
 
-  shrink (ZDD.Empty) = []
-  shrink (ZDD.Base) = []
+  shrink ZDD.Empty = []
+  shrink ZDD.Base = []
   shrink (ZDD.Branch x p0 p1) =
     [p0, p1]
     ++
@@ -229,7 +229,7 @@ prop_nonSuperset_difference =
 -- ------------------------------------------------------------------------
 
 isHittingSetOf :: IntSet -> Set IntSet -> Bool
-isHittingSetOf s g = all (\e -> not (IntSet.null (s `IntSet.intersection` e))) g
+isHittingSetOf s = all (\e -> not (IntSet.null (s `IntSet.intersection` e)))
 
 prop_minimalHittingSetsKnuth_isHittingSet :: Property
 prop_minimalHittingSetsKnuth_isHittingSet =
@@ -344,7 +344,7 @@ prop_subsets_size =
     forAll arbitrary $ \xs ->
       let a :: ZDD o
           a = ZDD.subsets xs
-       in counterexample (show a) $ ZDD.size a === (2 :: Integer) ^ (IntSet.size xs)
+       in counterexample (show a) $ ZDD.size a === (2 :: Integer) ^ IntSet.size xs
 
 prop_subsetsAtLeast :: Property
 prop_subsetsAtLeast =
@@ -424,7 +424,7 @@ prop_combinations_are_combinations =
          in counterexample (show a) $
               not (ZDD.null a)
               ==>
-              (forAll (arbitraryMember a) $ \ys -> (ys `IntSet.isSubsetOf` xs) .&&. (IntSet.size ys === k))
+              forAll (arbitraryMember a) (\ys -> (ys `IntSet.isSubsetOf` xs) .&&. (IntSet.size ys === k))
 
 prop_combinations_size :: Property
 prop_combinations_size =
@@ -434,7 +434,7 @@ prop_combinations_size =
         let a :: ZDD o
             a = ZDD.combinations xs k
             n = toInteger $ IntSet.size xs
-         in counterexample (show a) $ ZDD.size a === (product [(n - toInteger k + 1)..n] `div` (product [1..toInteger k]))
+         in counterexample (show a) $ ZDD.size a === (product [(n - toInteger k + 1)..n] `div` product [1..toInteger k])
 
 case_toList_lazyness :: Assertion
 case_toList_lazyness = do
@@ -815,7 +815,7 @@ case_jdd_test_1 = do
 
 case_jdd_test_2 :: Assertion
 case_jdd_test_2 = do
-  let [a, b, c, d] = [4, 3, 2, 1]
+  let (a, b, c, d) = (4, 3, 2, 1)
 
   -- this is the exact construction sequence of Fig.14 in "Zero-suppressed BDDs and their application" by Minato
   let fig14 :: ZDD ZDD.DescOrder
@@ -854,15 +854,12 @@ case_jdd_test_3 = do
 -- ------------------------------------------------------------------------
 
 subsetOf :: IntSet -> Gen IntSet
-subsetOf = liftM IntSet.fromList . sublistOf . IntSet.toList
+subsetOf = fmap IntSet.fromList . sublistOf . IntSet.toList
 
 arbitrarySmallIntMap :: Arbitrary a => Gen (IntMap a)
 arbitrarySmallIntMap = do
   n <- choose (0, 12)
-  liftM IntMap.fromList $ replicateM n $ do
-    k <- arbitrary
-    v <- arbitrary
-    return (k, v)
+  fmap IntMap.fromList $ replicateM n $ (,) <$> arbitrary <*> arbitrary
 
 -- ------------------------------------------------------------------------
 

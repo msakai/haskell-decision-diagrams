@@ -221,8 +221,7 @@ instance Show (BDD a) where
 instance Read (BDD a) where
   readPrec = parens $ prec 10 $ do
     Ident "fromGraph" <- lexP
-    gv <- readPrec
-    return (fromGraph gv)
+    fromGraph <$> readPrec
 
   readListPrec = readListPrecDefault
 
@@ -250,7 +249,7 @@ notB bdd = runST $ do
         case m of
           Just y -> return y
           Nothing -> do
-            ret <- liftM2 (Branch ind) (f lo) (f hi)
+            ret <- Branch ind <$> f lo <*> f hi
             H.insert h n ret
             return ret
   f bdd
@@ -271,9 +270,9 @@ mkApplyOp isCommutative func = do
           Just y -> return y
           Nothing -> do
             ret <- case bddCase2 (Proxy :: Proxy a) n1 n2 of
-              BDDCase2GT x2 lo2 hi2 -> liftM2 (Branch x2) (f n1 lo2) (f n1 hi2)
-              BDDCase2LT x1 lo1 hi1 -> liftM2 (Branch x1) (f lo1 n2) (f hi1 n2)
-              BDDCase2EQ x lo1 hi1 lo2 hi2 -> liftM2 (Branch x) (f lo1 lo2) (f hi1 hi2)
+              BDDCase2GT x2 lo2 hi2 -> Branch x2 <$> f n1 lo2 <*> f n1 hi2
+              BDDCase2LT x1 lo1 hi1 -> Branch x1 <$> f lo1 n2 <*> f hi1 n2
+              BDDCase2EQ x lo1 hi1 lo2 hi2 -> Branch x <$> f lo1 lo2 <*> f hi1 hi2
               BDDCase2EQ2 _ _ -> error "apply: should not happen"
             H.insert h key ret
             return ret
@@ -361,7 +360,7 @@ ite c' t' e' = runST $ do
                 let (c0, c1) = case c of{ Branch x' lo hi | x' == x -> (lo, hi); _ -> (c, c) }
                     (t0, t1) = case t of{ Branch x' lo hi | x' == x -> (lo, hi); _ -> (t, t) }
                     (e0, e1) = case e of{ Branch x' lo hi | x' == x -> (lo, hi); _ -> (e, e) }
-                ret <- liftM2 (Branch x) (f c0 t0 e0) (f c1 t1 e1)
+                ret <- Branch x <$> f c0 t0 e0 <*> f c1 t1 e1
                 H.insert h key ret
                 return ret
   f c' t' e'
@@ -391,7 +390,7 @@ pbAtLeast xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (k <= ub) = SLeaf False
+      | k > ub = SLeaf False
       | i == V.length xs' && 0 >= k = SLeaf True
       | lb >= k = SLeaf True -- all remaining variables are don't-care
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
@@ -410,7 +409,7 @@ pbAtMost xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (lb <= k) = SLeaf False
+      | lb > k = SLeaf False
       | i == V.length xs' && 0 <= k = SLeaf True
       | ub <= k = SLeaf True -- all remaining variables are don't-care
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
@@ -474,7 +473,7 @@ forAll x bdd = runST $ do
           Nothing -> do
             ret <- if ind == x
                    then andOp lo hi
-                   else liftM2 (Branch ind) (f lo) (f hi)
+                   else Branch ind <$> f lo <*> f hi
             H.insert h n ret
             return ret
       f a = return a
@@ -492,7 +491,7 @@ exists x bdd = runST $ do
           Nothing -> do
             ret <- if ind == x
                    then orOp lo hi
-                   else liftM2 (Branch ind) (f lo) (f hi)
+                   else Branch ind <$> f lo <*> f hi
             H.insert h n ret
             return ret
       f a = return a
@@ -509,7 +508,7 @@ existsUnique x bdd = runST $ do
           Just y -> return y
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) ind x of
-              LT -> liftM2 (Branch ind) (f lo) (f hi)
+              LT -> Branch ind <$> f lo <*> f hi
               EQ -> xorOp lo hi
               GT -> return F
             H.insert h n ret
@@ -528,7 +527,7 @@ forAllSet vars bdd = runST $ do
           Just y -> return y
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) ind x of
-              LT -> liftM2 (Branch ind) (f xxs lo) (f xxs hi)
+              LT -> Branch ind <$> f xxs lo <*> f xxs hi
               EQ -> do
                 r0 <- f xs lo
                 r1 <- f xs hi
@@ -550,7 +549,7 @@ existsSet vars bdd = runST $ do
           Just y -> return y
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) ind x of
-              LT -> liftM2 (Branch ind) (f xxs lo) (f xxs hi)
+              LT -> Branch ind <$> f xxs lo <*> f xxs hi
               EQ -> do
                 r0 <- f xs lo
                 r1 <- f xs hi
@@ -573,7 +572,7 @@ existsUniqueSet vars bdd = runST $ do
           Just y -> return y
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) ind x of
-              LT -> liftM2 (Branch ind) (f xxs lo) (f xxs hi)
+              LT -> Branch ind <$> f xxs lo <*> f xxs hi
               EQ -> do
                 r0 <- f xs lo
                 r1 <- f xs hi
@@ -694,7 +693,7 @@ restrict x val bdd = runST $ do
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) ind x of
               GT -> return n
-              LT -> liftM2 (Branch ind) (f lo) (f hi)
+              LT -> Branch ind <$> f lo <*> f hi
               EQ -> if val then return hi else return lo
             H.insert h n ret
             return ret
@@ -713,7 +712,7 @@ restrictSet val bdd = runST $ do
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) ind x of
               GT -> f xs n
-              LT -> liftM2 (Branch ind) (f xxs lo) (f xxs hi)
+              LT -> Branch ind <$> f xxs lo <*> f xxs hi
               EQ -> if v then f xs hi else f xs lo
             H.insert h n ret
             return ret
@@ -735,15 +734,15 @@ restrictLaw law bdd = runST $ do
           Just y -> return y
           Nothing -> do
             ret <- case bddCase2 (Proxy :: Proxy a) n1 n2 of
-              BDDCase2GT x2 lo2 hi2 -> liftM2 (Branch x2) (f n1 lo2) (f n1 hi2)
+              BDDCase2GT x2 lo2 hi2 -> Branch x2 <$> f n1 lo2 <*> f n1 hi2
               BDDCase2EQ x1 lo1 hi1 lo2 hi2
                 | lo1 == F  -> f hi1 hi2
                 | hi1 == F  -> f lo1 lo2
-                | otherwise -> liftM2 (Branch x1) (f lo1 lo2) (f hi1 hi2)
+                | otherwise -> Branch x1 <$> f lo1 lo2 <*> f hi1 hi2
               BDDCase2LT x1 lo1 hi1
                 | lo1 == F  -> f hi1 n2
                 | hi1 == F  -> f lo1 n2
-                | otherwise -> liftM2 (Branch x1) (f lo1 n2) (f hi1 n2)
+                | otherwise -> Branch x1 <$> f lo1 n2 <*> f hi1 n2
               BDDCase2EQ2 _ _ -> error "restrictLaw: should not happen"
             H.insert h (n1, n2) ret
             return ret
@@ -798,12 +797,12 @@ substSet s m = runST $ do
 
   h <- C.newSized defaultTableSize
   let -- f :: IntMap (BDD a) -> [(IntMap Bool, BDD a)] -> IntMap (BDD a) -> ST _ (BDD a)
-      f conditions conditioned _ | assert (length conditioned >= 1 && all (\(cond, _) -> IntMap.keysSet cond `IntSet.isSubsetOf` IntMap.keysSet conditions) conditioned) False = undefined
+      f conditions conditioned _ | assert (not (null conditioned) && all (\(cond, _) -> IntMap.keysSet cond `IntSet.isSubsetOf` IntMap.keysSet conditions) conditioned) False = undefined
       f conditions conditioned remaining = do
         let l1 = minimum $ map (level . snd) conditioned
             -- remaining' = IntMap.filterWithKey (\x _ -> l1 <= NonTerminal x) remaining
         remaining' <- do
-          tmp <- liftM IntSet.unions $ mapM (supportOp . snd) conditioned
+          tmp <- IntSet.unions <$> mapM (supportOp . snd) conditioned
           return $ IntMap.restrictKeys remaining tmp
         let l = minimum $ l1 : map level (IntMap.elems remaining' ++ IntMap.elems conditions)
         assert (all (\c -> NonTerminal c <= l) (IntMap.keys conditions)) $ return ()
@@ -887,7 +886,7 @@ gfp f = go true
 findSatM :: MonadPlus m => BDD a -> m (IntMap Bool)
 findSatM = fold f g
   where
-    f x lo hi = mplus (liftM (IntMap.insert x False) lo) (liftM (IntMap.insert x True) hi)
+    f x lo hi = (IntMap.insert x False <$> lo) `mplus` (IntMap.insert x True <$> hi)
     g b = if b then return IntMap.empty else mzero
 
 -- | Find one satisfying partial assignment
@@ -901,18 +900,18 @@ allSat = findSatM
 findSatCompleteM :: forall a m. (MonadPlus m, ItemOrder a, HasCallStack) => IntSet -> BDD a -> m (IntMap Bool)
 findSatCompleteM xs0 bdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f _ (Leaf False) = return $ mzero
+  let f _ (Leaf False) = return mzero
       f xs (Leaf True) = return $ foldM (\m x -> msum [return (IntMap.insert x v m) | v <- [False, True]]) IntMap.empty xs
       f xs n@(Branch x lo hi) = do
         case span (\x2 -> compareItem (Proxy :: Proxy a) x2 x == LT) xs of
-          (ys, (x':xs')) | x == x' -> do
+          (ys, x':xs') | x == x' -> do
             r <- H.lookup h n
             ps <- case r of
               Just ret -> return ret
               Nothing -> do
                 r0 <- f xs' lo
                 r1 <- unsafeInterleaveST $ f xs' hi
-                let ret = liftM (IntMap.insert x False) r0 `mplus` liftM (IntMap.insert x True) r1
+                let ret = (IntMap.insert x False <$> r0) `mplus` (IntMap.insert x True <$> r1)
                 H.insert h n ret
                 return ret
             return $ do
@@ -951,7 +950,7 @@ allSatComplete = findSatCompleteM
 countSat :: forall a b. (ItemOrder a, Num b, Bits b, HasCallStack) => IntSet -> BDD a -> b
 countSat xs bdd = runST $ do
   h <- C.newSized defaultTableSize
-  let f _ (Leaf False) = return $ 0
+  let f _ (Leaf False) = return 0
       f ys (Leaf True) = return $! 1 `shiftL` length ys
       f ys node@(Branch x lo hi) = do
         case span (\x2 -> compareItem (Proxy :: Proxy a) x2 x == LT) ys of
@@ -1002,7 +1001,7 @@ uniformSatM xs0 bdd0 = func IntMap.empty
                          (Branch x _ _, x' : xs') | x == x' -> return xs'
                          (Branch x _ _, _) -> error ("uniformSatM: " ++ show x ++ " should not occur")
                          (Leaf _, []) -> return []
-                         (Leaf _, _:_) -> error ("uniformSatM: should not happen")
+                         (Leaf _, _:_) -> error "uniformSatM: should not happen"
                 (s, func0) <- g xs' bdd
                 let func' !m !gen = do
 #if MIN_VERSION_mwc_random(0,15,0)
@@ -1033,7 +1032,7 @@ uniformSatM xs0 bdd0 = func IntMap.empty
                         func0 (IntMap.insert x False a) gen
                 H.insert h bdd (s, func')
                 return (s, func')
-      liftM snd $ f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs0)) bdd0
+      snd <$> f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs0)) bdd0
 
 -- ------------------------------------------------------------------------
 

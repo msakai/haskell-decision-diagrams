@@ -225,8 +225,7 @@ instance Show (ZDD a) where
 instance Read (ZDD a) where
   readPrec = parens $ prec 10 $ do
     Ident "fromGraph" <- lexP
-    gv <- readPrec
-    return (fromGraph gv)
+    fromGraph <$> readPrec
 
   readListPrec = readListPrecDefault
 
@@ -298,7 +297,7 @@ combinations xs k
     n = V.length table
 
     f :: (Int, Int) -> Sig (Int, Int)
-    f (!_, !0) = SLeaf True
+    f (!_, 0) = SLeaf True
     f (!i, !k')
       | i + k' > n = SLeaf False
       | otherwise  = SBranch (table V.! i) (i+1, k') (i+1, k'-1)
@@ -314,7 +313,7 @@ subsetsAtLeast xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (k <= ub) = SLeaf False
+      | k > ub = SLeaf False
       | i == V.length xs' && 0 >= k = SLeaf True
       | lb >= k = SBranch x (i+1, lb) (i+1, lb) -- all remaining variables are don't-care
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
@@ -333,7 +332,7 @@ subsetsAtMost xs k0 = unfoldOrd f (0, k0)
 
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
-      | not (lb <= k) = SLeaf False
+      | lb > k = SLeaf False
       | i == V.length xs' && 0 <= k = SLeaf True
       | ub <= k = SBranch x (i+1, ub) (i+1, ub) -- all remaining variables are don't-care
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
@@ -479,8 +478,8 @@ mapInsert var zdd = runST $ do
           Nothing -> do
             ret <- case compareItem (Proxy :: Proxy a) top var of
               GT -> return (Branch var Empty p)
-              LT -> liftM2 (Branch top) (f p0) (f p1)
-              EQ -> liftM (Branch top Empty) (unionOp p0 p1)
+              LT -> Branch top <$> f p0 <*> f p1
+              EQ -> Branch top Empty <$> unionOp p0 p1
             H.insert h p ret
             return ret
   f zdd
@@ -702,7 +701,7 @@ minimalHittingSetsToda :: forall a. ItemOrder a => ZDD a -> ZDD a
 minimalHittingSetsToda = minimal . hittingSetsBDD
 
 hittingSetsBDD :: forall a. ItemOrder a => ZDD a -> BDD.BDD a
-hittingSetsBDD = fold' (\top h0 h1 -> h0 BDD..&&. BDD.Branch top h1 BDD.true) (\b -> BDD.Leaf (not b))
+hittingSetsBDD = fold' (\top h0 h1 -> h0 BDD..&&. BDD.Branch top h1 BDD.true) (BDD.Leaf . not)
 
 minimal :: forall a. ItemOrder a => BDD.BDD a -> ZDD a
 minimal bdd = runST $ do
@@ -716,7 +715,7 @@ minimal bdd = runST $ do
           Nothing -> do
             ml <- f lo
             mh <- f hi
-            ret <- liftM (Branch x ml) (diffOp mh ml)
+            ret <- Branch x ml <$> diffOp mh ml
             H.insert h p ret
             return ret
   f bdd
@@ -823,7 +822,7 @@ fromListOfSortedList :: forall a. ItemOrder a => [[Int]] -> ZDD a
 fromListOfSortedList = unions . map f
   where
     f :: [Int] -> ZDD a
-    f = foldr (\x node -> Branch x Empty node) Base
+    f = foldr (\x -> Branch x Empty) Base
 
 -- | Fold over the graph structure of the ZDD.
 --
