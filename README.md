@@ -10,7 +10,7 @@ Dev:
 
 [Binary Decision Diagrams (BDD)](https://en.wikipedia.org/wiki/Binary_decision_diagram) and [Zero-suppressed Binary Decision Diagrams (ZDD)](https://en.wikipedia.org/wiki/Zero-suppressed_decision_diagram) implementation in Haskell.
 
-BDD is a data stucture suitable for representing boolean functions (can be thought as a compressed representation of truth tables) and many operations on boolean functions can be performed efficiently.  ZDD is a variant of BDD suitable for representing (sparse) families of sets compactly.
+BDD is a data structure suitable for representing boolean functions (can be thought as a compressed representation of truth tables) and many operations on boolean functions can be performed efficiently.  ZDD is a variant of BDD suitable for representing (sparse) families of sets compactly.
 
 BDD/ZDD uses hash-consing for compact representation and efficient comparison, and we use [intern](https://hackage.haskell.org/package/intern) package for implementing hash-consing.
 
@@ -27,4 +27,4 @@ BDD/ZDD uses hash-consing for compact representation and efficient comparison, a
 
 \*1: `cudd`'s pure interface is different from normal Haskell data types (like ones in the [containers](https://hackage.haskell.org/package/containers) package, for example) because it requires `DDManager` argument.
 
-Please feel free to make a pull request for addition or correction to the comparision.
+Please feel free to make a pull request for addition or correction to the comparison.

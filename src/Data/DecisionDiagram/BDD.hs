@@ -78,7 +78,7 @@ module Data.DecisionDiagram.BDD
   , restrictSet
   , restrictLaw
 
-  -- * Substition / Composition
+  -- * Substitution / Composition
   , subst
   , substSet
 
