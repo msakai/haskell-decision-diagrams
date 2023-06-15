@@ -391,7 +391,6 @@ pbAtLeast xs k0 = unfoldOrd f (0, k0)
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
       | k > ub = SLeaf False
-      | i == V.length xs' && 0 >= k = SLeaf True
       | lb >= k = SLeaf True -- all remaining variables are don't-care
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
       where
@@ -410,7 +409,6 @@ pbAtMost xs k0 = unfoldOrd f (0, k0)
     f :: (Int, w) -> Sig (Int, w)
     f (!i, !k)
       | lb > k = SLeaf False
-      | i == V.length xs' && 0 <= k = SLeaf True
       | ub <= k = SLeaf True -- all remaining variables are don't-care
       | otherwise = SBranch x (i+1, k) (i+1, k-w)
       where
