@@ -44,7 +44,6 @@ module Data.DecisionDiagram.BDD.Internal.Node
   , foldGraphNodes
   ) where
 
-import Control.Monad
 import Control.Monad.ST
 import Control.Monad.ST.Unsafe
 import Data.Functor.Identity
@@ -145,7 +144,7 @@ numNodes node0 = runST $ do
               Branch _ lo hi -> f lo >> f hi
               _ -> return ()
   f node0
-  liftM length $ H.toList h
+  length <$> H.toList h
 
 -- ------------------------------------------------------------------------
 

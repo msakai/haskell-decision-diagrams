@@ -65,7 +65,7 @@ arbitrarySatisfyingAssignment :: forall a. BDD.ItemOrder a => BDD a -> IntSet ->
 arbitrarySatisfyingAssignment bdd xs = do
   m1 <- arbitrarySatisfyingPartialAssignment bdd
   let ys = xs `IntSet.difference` IntMap.keysSet m1
-  m2 <- liftM(IntMap.fromAscList) $ forM (IntSet.toAscList ys) $ \y -> do
+  m2 <- fmap IntMap.fromAscList $ forM (IntSet.toAscList ys) $ \y -> do
     v <- arbitrary
     return (y,v)
   return $ m1 `IntMap.union` m2
@@ -76,9 +76,9 @@ arbitrarySatisfyingPartialAssignment = f
     f (BDD.Leaf True) = return IntMap.empty
     f (BDD.Leaf False) = undefined
     f (BDD.Branch x lo hi) = oneof $
-      [liftM (IntMap.insert x False) (f lo) | lo /= BDD.Leaf False]
+      [IntMap.insert x False <$> f lo | lo /= BDD.Leaf False]
       ++
-      [liftM (IntMap.insert x True) (f hi) | hi /= BDD.Leaf False]
+      [IntMap.insert x True <$> f hi | hi /= BDD.Leaf False]
 
 -- ------------------------------------------------------------------------
 -- conjunction
@@ -930,7 +930,7 @@ prop_subst_not_occured :: Property
 prop_subst_not_occured =
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \(m :: BDD o) ->
-    forAll (arbitrary `suchThat` (\x -> x `IntSet.notMember` (BDD.support m))) $ \x ->
+    forAll (arbitrary `suchThat` (\x -> x `IntSet.notMember` BDD.support m)) $ \x ->
     forAll arbitrary $ \(n :: BDD o) ->
       BDD.subst x n m === m
 
@@ -982,7 +982,7 @@ prop_substSet_not_occured =
     forAll (f (BDD.support m)) $ \s ->
       BDD.substSet s m === m
   where
-    f xs = liftM IntMap.fromList $ listOf $ do
+    f xs = fmap IntMap.fromList $ listOf $ do
       y <- arbitrary `suchThat` (`IntSet.notMember` xs)
       m <- arbitrary
       return (y, m)
@@ -992,8 +992,8 @@ prop_substSet_compose =
   forAllItemOrder $ \(_ :: Proxy o) ->
     forAll arbitrary $ \xs ->
     forAll arbitrary $ \ys ->
-    forAll (liftM IntMap.fromList $ mapM (\x -> (,) <$> pure x <*> arbitraryBDDOver ys) (IntSet.toList xs)) $ \s1 ->
-    forAll (liftM IntMap.fromList $ mapM (\y -> (,) <$> pure y <*> arbitrary) (IntSet.toList ys)) $ \s2 ->
+    forAll (IntMap.fromList <$> mapM (\x -> (,) <$> pure x <*> arbitraryBDDOver ys) (IntSet.toList xs)) $ \s1 ->
+    forAll (IntMap.fromList <$> mapM (\y -> (,) <$> pure y <*> arbitrary) (IntSet.toList ys)) $ \s2 ->
     forAll (arbitraryBDDOver xs) $ \(m :: BDD o) ->
       BDD.substSet s2 (BDD.substSet s1 m) === BDD.substSet (IntMap.map (BDD.substSet s2) s1) m
 
@@ -1018,12 +1018,12 @@ arbitraryMonotoneExpr gen = sized f
   where
     f :: Int -> Gen (MonotoneExpr a)
     f n = oneof $
-      [ liftM MConst arbitrary
-      , liftM MVar gen
+      [ MConst <$> arbitrary
+      , MVar <$> gen
       ]
       ++
       concat
-      [ [liftM2 MAnd sub sub, liftM2 MOr sub sub]
+      [ [MAnd <$> sub <*> sub, MOr <$> sub <*> sub]
       | n > 0, let sub = f (n `div` 2)
       ]
 
@@ -1163,15 +1163,12 @@ prop_toGraph_fromGraph = do
 arbitrarySmallIntSet :: Gen IntSet
 arbitrarySmallIntSet = do
   n <- choose (0, 12)
-  liftM IntSet.fromList $ replicateM n arbitrary
+  IntSet.fromList <$> replicateM n arbitrary
 
 arbitrarySmallIntMap :: Arbitrary a => Gen (IntMap a)
 arbitrarySmallIntMap = do
   n <- choose (0, 12)
-  liftM IntMap.fromList $ replicateM n $ do
-    k <- arbitrary
-    v <- arbitrary
-    return (k, v)
+  fmap IntMap.fromList . replicateM n $ (,) <$> arbitrary <*> arbitrary
 
 -- ------------------------------------------------------------------------
 
