@@ -142,17 +142,15 @@ import Control.Monad.Primitive
 #endif
 import Control.Monad.ST
 import qualified Data.Foldable as Foldable
-import Data.Function (on)
 import Data.Hashable
 import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.HashTable.Class as H
 import qualified Data.HashTable.ST.Cuckoo as C
 import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
-import Data.List (foldl', sortBy)
+import Data.List (foldl')
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import Data.Maybe
@@ -235,7 +233,7 @@ instance ItemOrder a => Exts.IsList (ZDD a) where
   fromList = fromListOfSortedList . map f
     where
       f :: IntSet -> [Int]
-      f = sortBy (compareItem (Proxy :: Proxy a)) . IntSet.toList
+      f = setToList (Proxy :: Proxy a)
 
   toList = toListOfIntSets
 
@@ -283,7 +281,7 @@ singleton xs = insert xs empty
 
 -- | Set of all subsets, i.e. powerset
 subsets :: forall a. ItemOrder a => IntSet -> ZDD a
-subsets = foldl' f Base . sortBy (flip (compareItem (Proxy :: Proxy a))) . IntSet.toList
+subsets = foldl' f Base . reverse . setToList (Proxy :: Proxy a)
   where
     f zdd x = Branch x zdd zdd
 
@@ -293,7 +291,7 @@ combinations xs k
   | k < 0 = error "Data.DecisionDiagram.ZDD.combinations: negative size"
   | otherwise = unfoldOrd f (0, k)
   where
-    table = V.fromList $ sortBy (compareItem (Proxy :: Proxy a)) $ IntSet.toList xs
+    table = V.fromList $ setToList (Proxy :: Proxy a) xs
     n = V.length table
 
     f :: (Int, Int) -> Sig (Int, Int)
@@ -307,7 +305,7 @@ subsetsAtLeast :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> ZDD a
 subsetsAtLeast xs k0 = unfoldOrd f (0, k0)
   where
     xs' :: V.Vector (Int, w)
-    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    xs' = V.fromList $ mapToList (Proxy :: Proxy a) xs
     ys :: V.Vector (w, w)
     ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
 
@@ -326,7 +324,7 @@ subsetsAtMost :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> ZDD a
 subsetsAtMost xs k0 = unfoldOrd f (0, k0)
   where
     xs' :: V.Vector (Int, w)
-    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    xs' = V.fromList $ mapToList (Proxy :: Proxy a) xs
     ys :: V.Vector (w, w)
     ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
 
@@ -349,7 +347,7 @@ subsetsExactly :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> ZDD a
 subsetsExactly xs k0 = unfoldOrd f (0, k0)
   where
     xs' :: V.Vector (Int, w)
-    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    xs' = V.fromList $ mapToList (Proxy :: Proxy a) xs
     ys :: V.Vector (w, w)
     ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
 
@@ -367,7 +365,7 @@ subsetsExactlyIntegral :: forall a w. (ItemOrder a, Real w, Integral w) => IntMa
 subsetsExactlyIntegral xs k0 = unfoldOrd f (0, k0)
   where
     xs' :: V.Vector (Int, w)
-    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    xs' = V.fromList $ mapToList (Proxy :: Proxy a) xs
     ys :: V.Vector (w, w)
     ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
     ds :: V.Vector w
@@ -433,7 +431,7 @@ subset0 var zdd = runST $ do
 -- >>> toSetOfIntSets (insert (IntSet.fromList [1,2,3]) (fromListOfIntSets (map IntSet.fromList [[1,3], [2,4]])) :: ZDD AscOrder)
 -- fromList [fromList [1,2,3],fromList [1,3],fromList [2,4]]
 insert :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
-insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
+insert xs = f (setToList (Proxy :: Proxy a) xs)
   where
     f [] (Leaf _) = Base
     f [] (Branch top p0 p1) = Branch top (f [] p0) p1
@@ -450,7 +448,7 @@ insert xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
 -- >>> toSetOfIntSets (delete (IntSet.fromList [1,3]) (fromListOfIntSets (map IntSet.fromList [[1,2,3], [1,3], [2,4]])) :: ZDD AscOrder)
 -- fromList [fromList [1,2,3],fromList [2,4]]
 delete :: forall a. ItemOrder a => IntSet -> ZDD a -> ZDD a
-delete xs = f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs))
+delete xs = f (setToList (Proxy :: Proxy a) xs)
   where
     f [] (Leaf _) = Empty
     f [] (Branch top p0 p1) = Branch top (f [] p0) p1
@@ -731,7 +729,7 @@ minimalHittingSets = minimalHittingSetsToda
 member :: forall a. (ItemOrder a) => IntSet -> ZDD a -> Bool
 member xs = member' xs'
   where
-    xs' = sortBy (compareItem (Proxy :: Proxy a)) $ IntSet.toList xs
+    xs' = setToList (Proxy :: Proxy a) xs
 
 member' :: forall a. (ItemOrder a) => [Int] -> ZDD a -> Bool
 member' [] Base = True
@@ -808,7 +806,7 @@ fromListOfIntSets :: forall a. ItemOrder a => [IntSet] -> ZDD a
 fromListOfIntSets = fromListOfSortedList . map f
   where
     f :: IntSet -> [Int]
-    f = sortBy (compareItem (Proxy :: Proxy a)) . IntSet.toList
+    f = setToList (Proxy :: Proxy a)
 
 -- | Convert the family to a list of 'IntSet'.
 toListOfIntSets :: ZDD a -> [IntSet]
@@ -962,6 +960,7 @@ findMinSum weight =
 -- \max_{X\in S} \sum_{x\in X} w(x)
 -- \]
 --
+-- >>> import qualified Data.IntMap as IntMap
 -- >>> findMaxSum (IntMap.fromList [(1,2),(2,4),(3,-3)] IntMap.!) (fromListOfIntSets (map IntSet.fromList [[1], [2], [3], [1,2,3]]) :: ZDD AscOrder)
 -- (4,fromList [2])
 findMaxSum :: forall a w. (ItemOrder a, Num w, Ord w, HasCallStack) => (Int -> w) -> ZDD a -> (w, IntSet)
