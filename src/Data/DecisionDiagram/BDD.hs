@@ -124,7 +124,6 @@ import Control.Monad.ST
 import Control.Monad.ST.Unsafe
 import Data.Bits (Bits (shiftL))
 import qualified Data.Foldable as Foldable
-import Data.Function (on)
 import Data.Hashable
 import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.HashTable.Class as H
@@ -133,7 +132,6 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
-import Data.List (sortBy)
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import Data.Proxy
@@ -384,7 +382,7 @@ pbAtLeast :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> BDD a
 pbAtLeast xs k0 = unfoldOrd f (0, k0)
   where
     xs' :: V.Vector (Int, w)
-    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    xs' = V.fromList $ mapToList (Proxy :: Proxy a) xs
     ys :: V.Vector (w, w)
     ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
 
@@ -402,7 +400,7 @@ pbAtMost :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> BDD a
 pbAtMost xs k0 = unfoldOrd f (0, k0)
   where
     xs' :: V.Vector (Int, w)
-    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    xs' = V.fromList $ mapToList (Proxy :: Proxy a) xs
     ys :: V.Vector (w, w)
     ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
 
@@ -422,7 +420,7 @@ pbExactly :: forall a w. (ItemOrder a, Real w) => IntMap w -> w -> BDD a
 pbExactly xs k0 = unfoldOrd f (0, k0)
   where
     xs' :: V.Vector (Int, w)
-    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    xs' = V.fromList $ mapToList (Proxy :: Proxy a) xs
     ys :: V.Vector (w, w)
     ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
 
@@ -440,7 +438,7 @@ pbExactlyIntegral :: forall a w. (ItemOrder a, Real w, Integral w) => IntMap w -
 pbExactlyIntegral xs k0 = unfoldOrd f (0, k0)
   where
     xs' :: V.Vector (Int, w)
-    xs' = V.fromList $ sortBy (compareItem (Proxy :: Proxy a) `on` fst) $ IntMap.toList xs
+    xs' = V.fromList $ mapToList (Proxy :: Proxy a) xs
     ys :: V.Vector (w, w)
     ys = V.scanr (\(_, w) (lb,ub) -> if w >= 0 then (lb, ub+w) else (lb+w, ub)) (0,0) xs'
     ds :: V.Vector w
@@ -534,7 +532,7 @@ forAllSet vars bdd = runST $ do
             H.insert h n ret
             return ret
       f _ a = return a
-  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList vars)) bdd
+  f (setToList (Proxy :: Proxy a) vars) bdd
 
 -- | Existential quantification (∃) over a set of variables
 existsSet :: forall a. ItemOrder a => IntSet -> BDD a -> BDD a
@@ -556,7 +554,7 @@ existsSet vars bdd = runST $ do
             H.insert h n ret
             return ret
       f _ a = return a
-  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList vars)) bdd
+  f (setToList (Proxy :: Proxy a) vars) bdd
 
 -- | Unique existential quantification (∃!) over a set of variables
 existsUniqueSet :: forall a. ItemOrder a => IntSet -> BDD a -> BDD a
@@ -580,7 +578,7 @@ existsUniqueSet vars bdd = runST $ do
             return ret
       f (_ : _) _ = return F
       f [] a = return a
-  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList vars)) bdd
+  f (setToList (Proxy :: Proxy a) vars) bdd
 
 -- ------------------------------------------------------------------------
 
@@ -714,7 +712,7 @@ restrictSet val bdd = runST $ do
               EQ -> if v then f xs hi else f xs lo
             H.insert h n ret
             return ret
-  f (sortBy (compareItem (Proxy :: Proxy a) `on` fst) (IntMap.toList val)) bdd
+  f (mapToList (Proxy :: Proxy a) val) bdd
 
 -- | Compute generalized cofactor of F with respect to C.
 --
@@ -916,7 +914,7 @@ findSatCompleteM xs0 bdd = runST $ do
               p <- ps
               foldM (\m y -> msum [return (IntMap.insert y v m) | v <- [False, True]]) p ys
           _ -> error ("findSatCompleteM: " ++ show x ++ " should not occur")
-  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs0)) bdd
+  f (setToList (Proxy :: Proxy a) xs0) bdd
 
 -- | Find one satisfying (complete) assignment over a given set of variables
 --
@@ -962,7 +960,7 @@ countSat xs bdd = runST $ do
                 return n
             return $! n `shiftL` length zs
           (_, _) -> error ("countSat: " ++ show x ++ " should not occur")
-  f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs)) bdd
+  f (setToList (Proxy :: Proxy a) xs) bdd
 
 -- | Sample an assignment from uniform distribution over complete satisfiable assignments ('allSatComplete') of the BDD.
 --
@@ -1030,7 +1028,7 @@ uniformSatM xs0 bdd0 = func IntMap.empty
                         func0 (IntMap.insert x False a) gen
                 H.insert h bdd (s, func')
                 return (s, func')
-      snd <$> f (sortBy (compareItem (Proxy :: Proxy a)) (IntSet.toList xs0)) bdd0
+      snd <$> f (setToList (Proxy :: Proxy a) xs0) bdd0
 
 -- ------------------------------------------------------------------------
 

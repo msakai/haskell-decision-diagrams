@@ -33,14 +33,24 @@ module Data.DecisionDiagram.BDD.Internal.ItemOrder
   , Level (..)
   ) where
 
+import Data.Function (on)
 import Data.Kind (Type)
+import Data.List (sortBy)
 import Data.Proxy
 import Data.Reflection
+
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IntMap
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
+
 
 -- ------------------------------------------------------------------------
 
 class ItemOrder (a :: Type) where
   compareItem :: proxy a -> Int -> Int -> Ordering
+  mapToList :: proxy a -> IntMap b -> [(Int,b)]
+  setToList :: proxy a -> IntSet -> [Int]
 
 data AscOrder
 
@@ -48,14 +58,20 @@ data DescOrder
 
 instance ItemOrder AscOrder where
   compareItem _ = compare
+  mapToList _ = IntMap.toAscList
+  setToList _ = IntSet.toAscList
 
 instance ItemOrder DescOrder where
   compareItem _ = flip compare
+  mapToList _ = IntMap.toDescList
+  setToList _ = IntSet.toDescList
 
 data CustomOrder a
 
 instance Reifies s (Int -> Int -> Ordering) => ItemOrder (CustomOrder s) where
   compareItem _ = reflect (Proxy :: Proxy s)
+  mapToList o m = sortBy (compareItem o `on` fst) (IntMap.toList m)
+  setToList o s = sortBy (compareItem o) (IntSet.toList s)
 
 withAscOrder :: forall r. (Proxy AscOrder -> r) -> r
 withAscOrder k = k Proxy
