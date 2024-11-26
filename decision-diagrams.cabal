@@ -103,7 +103,7 @@ test-suite decision-diagrams-test
   build-depends:
       QuickCheck >=2.11.3 && <2.16
     , base >=4.11.0.0 && <5
-    , containers >=0.5.11.0 && <0.7
+    , containers >=0.5.11.0 && <0.8
     , decision-diagrams
     , deepseq >=1.4.3.0 && <1.6
     , mwc-random >=0.13.6.0 && <0.16
