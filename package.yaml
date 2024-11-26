@@ -21,7 +21,7 @@ description:         Please see the README on GitHub at <https://github.com/msak
 
 dependencies:
 - base >=4.11.0.0 && <5
-- containers >=0.5.11.0 && <0.7
+- containers >=0.5.11.0 && <0.8
 - mwc-random >=0.13.6.0 && <0.16
 
 other-extensions:
@@ -36,10 +36,10 @@ library:
   other-modules:
   - Data.DecisionDiagram.BDD.Internal.Node
   dependencies:
-  - hashable >=1.2.7.0 && <1.5
+  - hashable >=1.2.7.0 && <1.6
   - hashtables >=1.2.3.1 && <1.4
   - intern >=0.9.1.2 && <1.0.0.0
-  - primitive >=0.6.3.0 && <0.9
+  - primitive >=0.6.3.0 && <0.10
   - random >=1.1 && <1.3
   - reflection >=2.1.4 && <2.2
   - unordered-containers >=0.2.9.0 && <0.3
@@ -64,13 +64,13 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - decision-diagrams
-    - deepseq >=1.4.3.0 && <1.5
-    - QuickCheck >=2.11.3 && <2.15
+    - deepseq >=1.4.3.0 && <1.6
+    - QuickCheck >=2.11.3 && <2.16
     - quickcheck-instances >=0.3.19 && <0.4
     - statistics >=0.14.0.2 && <0.17
-    - tasty >=1.1.0.4 && <1.5
+    - tasty >=1.1.0.4 && <1.6
     - tasty-hunit >=0.10.0.1 && <0.11
-    - tasty-quickcheck >=0.10 && <0.11
+    - tasty-quickcheck >=0.10 && <0.12
     - tasty-th >=0.1.7 && <0.2
     - vector >=0.12.0.2 && <0.14
     other-extensions:
